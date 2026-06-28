@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="#1a1d27"/>
+  <!-- 3x3 grid lines -->
+  <!-- Outer border -->
+  <rect x="80" y="80" width="352" height="352" rx="8" fill="none" stroke="#6c8aff" stroke-width="12"/>
+  <!-- Inner grid: 3 cols, 3 rows — thin lines -->
+  <!-- vertical thin -->
+  <line x1="197" y1="80" x2="197" y2="432" stroke="#4a5080" stroke-width="4"/>
+  <line x1="314" y1="80" x2="314" y2="432" stroke="#4a5080" stroke-width="4"/>
+  <!-- horizontal thin -->
+  <line x1="80" y1="197" x2="432" y2="197" stroke="#4a5080" stroke-width="4"/>
+  <line x1="80" y1="314" x2="432" y2="314" stroke="#4a5080" stroke-width="4"/>
+  <!-- thick box dividers -->
+  <line x1="197" y1="80" x2="197" y2="432" stroke="#6c8aff" stroke-width="8"/>
+  <line x1="314" y1="80" x2="314" y2="432" stroke="#6c8aff" stroke-width="8"/>
+  <line x1="80" y1="197" x2="432" y2="197" stroke="#6c8aff" stroke-width="8"/>
+  <line x1="80" y1="314" x2="432" y2="314" stroke="#6c8aff" stroke-width="8"/>
+  <!-- A few sample numbers -->
+  <text x="138" y="165" font-family="Arial,sans-serif" font-size="72" font-weight="bold" fill="#a0aaff" text-anchor="middle">5</text>
+  <text x="255" y="165" font-family="Arial,sans-serif" font-size="72" font-weight="bold" fill="#6c8aff" text-anchor="middle">3</text>
+  <text x="372" y="282" font-family="Arial,sans-serif" font-size="72" font-weight="bold" fill="#a0aaff" text-anchor="middle">9</text>
+  <text x="138" y="399" font-family="Arial,sans-serif" font-size="72" font-weight="bold" fill="#6c8aff" text-anchor="middle">7</text>
+  <text x="372" y="399" font-family="Arial,sans-serif" font-size="72" font-weight="bold" fill="#a0aaff" text-anchor="middle">2</text>
+</svg>

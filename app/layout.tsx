@@ -6,16 +6,19 @@ export const metadata: Metadata = {
   title: 'Sudoku',
   description: 'Classic 9×9 Sudoku — generate, play, and peek!',
   manifest: '/manifest.json',
+  // iOS PWA
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'Sudoku',
   },
   icons: {
+    // iOS home-screen icons
     apple: [
       { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
       { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
     ],
+    // Browser favicon / Android
     icon: [
       { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
       { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
@@ -36,16 +39,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        {/* iOS PWA full-screen splash colour */}
+        {/* iOS PWA */}
         <meta name="mobile-web-app-capable" content="yes" />
+        {/* Android / Chrome — links the manifest with CORS so Samsung Internet can read it */}
+        <link rel="manifest" href="/manifest.json" crossOrigin="use-credentials" />
+        {/* Android Chrome toolbar colour (duplicates viewport themeColor for older Chrome) */}
+        <meta name="theme-color" content="#0f1117" />
       </head>
       <body>
         {children}
-        {/* Register service worker */}
+
+        {/* Register service worker — required for Android install prompt */}
         <Script id="sw-register" strategy="afterInteractive">{`
           if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
-              navigator.serviceWorker.register('/sw.js');
+              navigator.serviceWorker.register('/sw.js').then(function(reg) {
+                console.log('SW registered:', reg.scope);
+              }).catch(function(err) {
+                console.log('SW registration failed:', err);
+              });
             });
           }
         `}</Script>

@@ -1,0 +1,390 @@
+/* ── Page layout ─────────────────────────────────── */
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 0 16px 32px;
+  background: var(--bg);
+}
+
+/* ── Header ──────────────────────────────────────── */
+.header {
+  width: 100%;
+  max-width: 560px;
+  text-align: center;
+  padding: 36px 0 20px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -1px;
+  color: var(--text);
+}
+
+.logoIcon {
+  font-size: 1.6rem;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.tagline {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* ── Main ────────────────────────────────────────── */
+.main {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+/* ── Top controls ────────────────────────────────── */
+.topControls {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.diffRow {
+  display: flex;
+  gap: 6px;
+}
+
+.diffBtn {
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.diffBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.diffActive {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff !important;
+  box-shadow: 0 0 14px var(--accent-glow);
+}
+
+.newBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.newBtn:hover {
+  border-color: var(--accent2);
+  color: var(--accent2);
+}
+
+/* ── Board wrapper ───────────────────────────────── */
+.boardWrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* ── Win overlay ─────────────────────────────────── */
+.wonOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 17, 23, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  border-radius: var(--radius);
+  backdrop-filter: blur(4px);
+}
+
+.wonCard {
+  background: var(--surface);
+  border: 1.5px solid var(--success);
+  border-radius: 20px;
+  padding: 36px 44px;
+  text-align: center;
+  box-shadow: 0 0 40px rgba(6, 214, 160, 0.2);
+  animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes popIn {
+  from { transform: scale(0.8); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+.wonEmoji { font-size: 3rem; margin-bottom: 8px; }
+
+.wonTitle {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--success);
+  margin-bottom: 6px;
+}
+
+.wonSub {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+}
+
+.wonBtn {
+  padding: 10px 28px;
+  border-radius: 999px;
+  border: none;
+  background: var(--success);
+  color: #0f1117;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.wonBtn:hover { opacity: 0.85; }
+
+/* ── Board grid ──────────────────────────────────── */
+.board {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  grid-template-rows: repeat(9, 1fr);
+  width: 100%;
+  aspect-ratio: 1;
+  background: var(--surface);
+  border: 2.5px solid var(--border-thick);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px var(--border);
+  user-select: none;
+}
+
+/* ── Cell ────────────────────────────────────────── */
+.cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(0.9rem, 3vw, 1.35rem);
+  font-weight: 600;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  color: var(--user);
+  background: var(--surface);
+  position: relative;
+}
+
+.cell:last-child,
+.cell:nth-child(9n) {
+  border-right: none;
+}
+
+/* Box borders */
+.boxBorderRight {
+  border-right: 2.5px solid var(--border-thick) !important;
+}
+.boxBorderBottom {
+  border-bottom: 2.5px solid var(--border-thick) !important;
+}
+
+/* Highlight states */
+.cellRelated {
+  background: var(--surface2);
+}
+
+.cellSelected {
+  background: var(--accent-glow) !important;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  z-index: 2;
+}
+
+.cellSameNum {
+  background: rgba(108, 138, 255, 0.12) !important;
+}
+
+.cellGiven {
+  color: var(--given);
+  font-weight: 700;
+}
+
+.cellError {
+  color: var(--error) !important;
+  background: rgba(255, 92, 122, 0.12) !important;
+}
+
+.cellPeek {
+  color: var(--peek) !important;
+  background: rgba(255, 209, 102, 0.1) !important;
+  animation: peekPulse 0.4s ease;
+}
+
+@keyframes peekPulse {
+  0%   { background: rgba(255, 209, 102, 0.3); }
+  100% { background: rgba(255, 209, 102, 0.1); }
+}
+
+/* ── Number pad ──────────────────────────────────── */
+.numpad {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+
+.numBtn {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: clamp(0.95rem, 2.5vw, 1.25rem);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.numBtn:hover {
+  background: var(--surface2);
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(108, 138, 255, 0.2);
+}
+
+.numActive {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #fff !important;
+  box-shadow: 0 0 14px var(--accent-glow);
+}
+
+.eraseBtn {
+  font-size: clamp(0.85rem, 2vw, 1.1rem);
+  color: var(--text-muted);
+}
+
+.eraseBtn:hover {
+  color: var(--accent2) !important;
+  border-color: var(--accent2) !important;
+}
+
+/* ── Action row ──────────────────────────────────── */
+.actionRow {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.peekBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.02em;
+}
+
+.peekBtn:hover:not(:disabled) {
+  border-color: var(--peek);
+  color: var(--peek);
+  box-shadow: 0 0 20px rgba(255, 209, 102, 0.15);
+}
+
+.peekBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.peekActive {
+  border-color: var(--peek) !important;
+  color: var(--peek) !important;
+  box-shadow: 0 0 20px rgba(255, 209, 102, 0.25) !important;
+  animation: peekGlow 1s ease-in-out infinite alternate;
+}
+
+@keyframes peekGlow {
+  from { box-shadow: 0 0 10px rgba(255, 209, 102, 0.2); }
+  to   { box-shadow: 0 0 28px rgba(255, 209, 102, 0.4); }
+}
+
+.peekCooldown {
+  border-color: var(--border) !important;
+  color: var(--text-muted) !important;
+}
+
+.peekIcon { font-size: 1rem; }
+
+/* ── Instructions ────────────────────────────────── */
+.instructions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 10px;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.dot { opacity: 0.4; }
+
+/* ── Footer ──────────────────────────────────────── */
+.footer {
+  margin-top: auto;
+  padding: 24px 0 12px;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* ── Responsive ──────────────────────────────────── */
+@media (max-width: 480px) {
+  .logo { font-size: 1.6rem; }
+  .topControls { justify-content: center; }
+  .diffBtn { padding: 6px 12px; font-size: 0.75rem; }
+  .wonCard { padding: 28px 24px; }
+}

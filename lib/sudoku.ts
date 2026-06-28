@@ -65,9 +65,10 @@ function countSolutions(board: number[][], limit = 2): number {
   return 1; // fully filled = 1 solution
 }
 
-export type Difficulty = 'easy' | 'medium' | 'hard';
+export type Difficulty = 'extra-easy' | 'easy' | 'medium' | 'hard';
 
 const CLUES: Record<Difficulty, number> = {
+  'extra-easy': 50,   // ~50 givens — very few blanks, great for practice
   easy: 36,
   medium: 28,
   hard: 22,

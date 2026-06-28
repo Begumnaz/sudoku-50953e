@@ -49,16 +49,31 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
 
-        {/* Register service worker — required for Android install prompt */}
+        {/* Register service worker + cache all Next.js chunks for full offline support */}
         <Script id="sw-register" strategy="afterInteractive">{`
           if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
               navigator.serviceWorker.register('/sw.js').then(function(reg) {
                 console.log('SW registered:', reg.scope);
+                // Collect all same-origin JS/CSS URLs already loaded and send to SW to cache
+                reg.active && sendChunks(reg.active);
+                reg.addEventListener('updatefound', function() {
+                  var newWorker = reg.installing;
+                  newWorker && newWorker.addEventListener('statechange', function() {
+                    if (newWorker.state === 'activated') sendChunks(newWorker);
+                  });
+                });
               }).catch(function(err) {
                 console.log('SW registration failed:', err);
               });
             });
+
+            function sendChunks(worker) {
+              var urls = Array.from(document.querySelectorAll('link[rel=stylesheet],script[src]'))
+                .map(function(el) { return el.href || el.src; })
+                .filter(function(u) { return u && u.startsWith(location.origin); });
+              worker.postMessage({ type: 'CACHE_URLS', urls: urls });
+            }
           }
         `}</Script>
       </body>

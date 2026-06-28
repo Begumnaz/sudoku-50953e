@@ -21,7 +21,7 @@ function buildCellStates(puzzle: Board, solution: Board): CellState[][] {
 }
 
 export default function SudokuPage() {
-  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
+  const [difficulty, setDifficulty] = useState<Difficulty>('easy');
   const [solution, setSolution] = useState<Board>([]);
   const [cells, setCells] = useState<CellState[][]>([]);
   const [selected, setSelected] = useState<[number, number] | null>(null);
@@ -66,7 +66,7 @@ export default function SudokuPage() {
     setCells(prev => {
       const next = prev.map(row => row.map(cell => ({ ...cell })));
       next[r][c].value = num;
-      next[r][c].error = num !== (solution[r][c] as number);
+      next[r][c].error = false; // no red highlighting — learn at your own pace
       return next;
     });
   }, [selected, won, cells, solution]);
@@ -145,13 +145,13 @@ export default function SudokuPage() {
         {/* Controls top */}
         <div className={styles.topControls}>
           <div className={styles.diffRow}>
-            {(['easy', 'medium', 'hard'] as Difficulty[]).map(d => (
+            {(['extra-easy', 'easy', 'medium', 'hard'] as Difficulty[]).map(d => (
               <button
                 key={d}
                 className={`${styles.diffBtn} ${difficulty === d ? styles.diffActive : ''}`}
                 onClick={() => handleDifficulty(d)}
               >
-                {d.charAt(0).toUpperCase() + d.slice(1)}
+                {d === 'extra-easy' ? '★ Easy' : d.charAt(0).toUpperCase() + d.slice(1)}
               </button>
             ))}
           </div>
@@ -255,7 +255,7 @@ export default function SudokuPage() {
           <span className={styles.dot}>·</span>
           <span>Keyboard arrows &amp; 1–9 work too</span>
           <span className={styles.dot}>·</span>
-          <span>Red = wrong digit</span>
+          <span>★ Easy = great for practice</span>
         </div>
       </main>
 

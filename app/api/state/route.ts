@@ -18,15 +18,15 @@ export async function GET(req: NextRequest) {
   const db = getDb();
   const row = db
     .prepare('SELECT * FROM game_state WHERE difficulty = ?')
-    .get(diff) as Record<string, string> | undefined;
+    .get(diff) as Record<string, unknown> | undefined;
 
   if (!row) return NextResponse.json({ found: false });
 
   return NextResponse.json({
     found: true,
-    puzzle:     JSON.parse(row.puzzle),
-    solution:   JSON.parse(row.solution),
-    cells:      JSON.parse(row.cells),
+    puzzle:     JSON.parse(row.puzzle as string),
+    solution:   JSON.parse(row.solution as string),
+    cells:      JSON.parse(row.cells as string),
     selected:   row.selected_r != null ? [Number(row.selected_r), Number(row.selected_c)] : null,
     won:        row.won === '1' || row.won === 1,
   });

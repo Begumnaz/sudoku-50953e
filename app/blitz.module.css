@@ -746,6 +746,34 @@
   font-weight: 600;
 }
 
+/* ── submitted: your own verdict (shown to you only) + waiting box ── */
+.submittedStack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.verdictCorrect,
+.verdictWrong {
+  width: 100%;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid;
+}
+.verdictCorrect {
+  color: var(--green);
+  background: var(--green-glow);
+  border-color: var(--green);
+}
+.verdictWrong {
+  color: var(--red);
+  background: rgba(255, 92, 122, 0.14);
+  border-color: var(--red);
+}
+
 /* ══════════════════════════════════════
    ROUND END
 ══════════════════════════════════════ */

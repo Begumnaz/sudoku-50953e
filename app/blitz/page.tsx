@@ -12,6 +12,7 @@ interface PlayerState {
   submitted: boolean;
   score: number;
   ready: boolean;
+  solved: boolean;
 }
 
 interface RoomState {
@@ -541,6 +542,7 @@ export default function BlitzPage() {
   const oppState     = room.players[opponent];
   const mySubmitted  = !!myState?.submitted;
   const oppSubmitted = !!oppState?.submitted;
+  const mySolved     = !!myState?.solved;
   const myReady      = !!myState?.ready;
   const oppReady     = !!oppState?.ready;
 
@@ -695,11 +697,16 @@ export default function BlitzPage() {
               )}
             </div>
           ) : (
-            <div className={styles.waitingOpponent}>
-              {oppSubmitted
-                ? <span className={styles.bothDone}>Both done! Calculating…</span>
-                : <><span className={styles.spinner} /><span>Waiting for {opponent}…</span></>
-              }
+            <div className={styles.submittedStack}>
+              <div className={mySolved ? styles.verdictCorrect : styles.verdictWrong}>
+                {mySolved ? '✓ Correct — locked in!' : '✗ Not solved · 0 pts this round'}
+              </div>
+              <div className={styles.waitingOpponent}>
+                {oppSubmitted
+                  ? <span className={styles.bothDone}>Both done! Calculating…</span>
+                  : <><span className={styles.spinner} /><span>Waiting for {opponent}…</span></>
+                }
+              </div>
             </div>
           )}
         </div>

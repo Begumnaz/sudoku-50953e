@@ -71,7 +71,27 @@ function elapsedSeconds(room: RoomRow): number {
   return (Date.now() - new Date(room.round_started_at + 'Z').getTime()) / 1000;
 }
 
-/** True when the submitted cells exactly match the solution (any board size). */
+/**
+ * Overlay the puzzle's given clues onto a player's entered cells to produce a
+ * complete board. The client only submits the cells it filled in — the puzzle's
+ * pre-filled clue cells are left null — so they must be merged back before any
+ * solution check, otherwise every given cell reads as a mismatch.
+ */
+function mergeGivens(
+  puzzle: (number | null)[][] | null,
+  cells: unknown,
+): (number | null)[][] | null {
+  if (!cells) return null;
+  const board = cells as (number | null)[][];
+  if (!puzzle) return board;
+  return puzzle.map((row, r) =>
+    row.map((val, c) =>
+      val !== null && val !== undefined ? val : (board[r]?.[c] ?? null),
+    ),
+  );
+}
+
+/** True when the (givens-merged) board exactly matches the solution. */
 function isSolved(cells: unknown, solution: number[][] | null): boolean {
   if (!cells || !solution) return false;
   const board = cells as (number | null)[][];
@@ -164,13 +184,17 @@ function buildRoomPayload(db: ReturnType<typeof getDb>, room: RoomRow) {
     .prepare('SELECT * FROM blitz_player_state WHERE room_id = ? AND round = ?')
     .all(ROOM_ID, room.current_round) as PlayerStateRow[];
 
-  const playerMap: Record<string, { cells: unknown; submitted: boolean; score: number; ready: boolean }> = {};
+  const playerMap: Record<string, { cells: unknown; submitted: boolean; score: number; ready: boolean; solved: boolean }> = {};
   for (const p of players) {
     playerMap[p.username] = {
       cells:     safeParseCells(p.cells),
       submitted: !!p.submitted,
       score:     p.score,
       ready:     p.cells === READY_SENTINEL,
+      // A correct solve always scores > 0 (base 100/200 + speed bonus); an
+      // incorrect or skipped submission scores 0. Lets the submitter see their
+      // own verdict immediately without revealing it to the opponent's UI.
+      solved:    !!p.submitted && p.score > 0,
     };
   }
 
@@ -318,9 +342,11 @@ export async function POST(req: NextRequest) {
     let savedCells: string | null = pState?.cells ?? null;
     if (action === 'submit') {
       const solution = room.solution ? JSON.parse(room.solution) : null;
+      const puzzle   = room.puzzle   ? JSON.parse(room.puzzle)   : null;
       const remaining = Math.max(0, room.round_duration - Math.floor(elapsedSeconds(room)));
       const size = boardSizeForRound(room.current_round);
-      score = computeScore(size, isSolved(cells, solution), remaining).total;
+      const solved = isSolved(mergeGivens(puzzle, cells), solution);
+      score = computeScore(size, solved, remaining).total;
       savedCells = JSON.stringify(cells);
     }
     // 'skip' → score stays 0, keep whatever cells were already synced.

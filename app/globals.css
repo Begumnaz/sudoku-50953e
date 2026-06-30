@@ -5,24 +5,27 @@
 }
 
 :root {
-  --bg: #0f1117;
-  --surface: #1a1d27;
-  --surface2: #22263a;
-  --border: #2e3350;
-  --border-thick: #4a5080;
-  --accent: #6c8aff;
-  --accent-glow: rgba(108, 138, 255, 0.25);
-  --accent2: #ff6c9d;
-  --text: #e8eaf6;
-  --text-muted: #7880a0;
-  --text-dim: #4a5080;
-  --given: #a0aaff;
-  --user: #ffffff;
-  --error: #ff5c7a;
-  --peek: #ffd166;
-  --success: #06d6a0;
-  --cell-size: 56px;
-  --radius: 12px;
+  --bg:            #0a0b10;
+  --surface:       #12141f;
+  --surface2:      #1a1d2e;
+  --surface3:      #222640;
+  --border:        #2a2e4a;
+  --border-bright: #3d4270;
+  --accent:        #7c6aff;
+  --accent2:       #ff6a9b;
+  --accent-glow:   rgba(124,106,255,0.30);
+  --accent2-glow:  rgba(255,106,155,0.25);
+  --gold:          #ffd166;
+  --gold-glow:     rgba(255,209,102,0.30);
+  --green:         #06d6a0;
+  --green-glow:    rgba(6,214,160,0.25);
+  --red:           #ff5c7a;
+  --text:          #e8eaff;
+  --text-muted:    #7880aa;
+  --text-dim:      #3d4270;
+  --radius:        14px;
+  --radius-sm:     8px;
+  --radius-lg:     20px;
 }
 
 html {
@@ -35,24 +38,35 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  /* Prevent iOS rubber-band scroll */
   overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
 }
 
 body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   min-height: 100vh;
   min-height: -webkit-fill-available;
-  /* Respect iOS notch / home indicator */
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-/* scrollbar */
-::-webkit-scrollbar { width: 6px; }
+button {
+  cursor: pointer;
+  font-family: inherit;
+  border: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+input {
+  font-family: inherit;
+  outline: none;
+}
+
+::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border-thick); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }

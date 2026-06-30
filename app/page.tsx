@@ -1,367 +1,675 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { generatePuzzle, isBoardComplete, Board, Difficulty } from '@/lib/sudoku';
-import styles from './sudoku.module.css';
+import styles from './blitz.module.css';
 
-type CellState = {
-  value: number | null;
-  given: boolean;
-  error: boolean;
-};
+/* ─────────────────────── types ─────────────────────── */
+type Board4 = (number | null)[][];
 
-function buildCellStates(puzzle: Board): CellState[][] {
-  return puzzle.map(row =>
-    row.map(val => ({ value: val, given: val !== null, error: false }))
+interface PlayerState {
+  cells: Board4 | null;
+  submitted: boolean;
+  score: number;
+  ready: boolean;
+}
+
+interface RoomState {
+  roomId: string;
+  status: 'waiting' | 'playing' | 'round_end';
+  currentRound: number;
+  puzzle: Board4 | null;
+  solution: Board4 | null;
+  roundDuration: number;
+  timeLeft: number;
+  roundStartedAt: string | null;
+  players: Record<string, PlayerState>;
+  scores: Record<string, { total_score: number; wins: number; losses: number }>;
+  updatedAt: string;
+}
+
+interface AuthUser {
+  username: string;
+  total_score: number;
+  wins: number;
+  losses: number;
+}
+
+const PLAYERS = ['Edin', 'Begus'] as const;
+const POLL_MS_PLAY  = 800;
+const POLL_MS_LOBBY = 2000;
+
+/* ─────────────────────── helpers ─────────────────────── */
+function emptyBoard(): Board4 {
+  return Array.from({ length: 4 }, () => Array(4).fill(null));
+}
+
+function buildDisplay(puzzle: Board4, userCells: Board4): Board4 {
+  return puzzle.map((row, r) =>
+    row.map((val, c) => (val !== null ? val : userCells[r][c]))
   );
 }
 
-/* ── persistence helpers ── */
-async function loadState(diff: Difficulty) {
+function isGiven(puzzle: Board4, r: number, c: number): boolean {
+  return puzzle[r][c] !== null;
+}
+
+function fmt(s: number): string {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+/* ─────────────────────── API calls ─────────────────────── */
+async function apiAuth(username: string, password: string): Promise<AuthUser | string> {
   try {
-    const res = await fetch(`/api/state?difficulty=${diff}`);
+    const res = await fetch('/api/blitz/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) return data.error || 'Login failed';
+    return data as AuthUser;
+  } catch { return 'Network error'; }
+}
+
+async function apiGetRoom(): Promise<RoomState | null> {
+  try {
+    const res = await fetch('/api/blitz/room', { cache: 'no-store' });
     if (!res.ok) return null;
     return await res.json();
   } catch { return null; }
 }
 
-async function saveState(payload: {
-  difficulty: Difficulty;
-  puzzle: Board;
-  solution: Board;
-  cells: CellState[][];
-  selected: [number, number] | null;
-  won: boolean;
-}) {
+async function apiAction(action: string, username: string, cells?: Board4): Promise<RoomState | null> {
   try {
-    await fetch('/api/state', {
+    const res = await fetch('/api/blitz/room', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ action, username, cells }),
     });
-  } catch { /* offline — ignore */ }
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
 }
 
-export default function SudokuPage() {
-  const [difficulty, setDifficulty] = useState<Difficulty>('easy');
-  const [puzzle, setPuzzle]         = useState<Board>([]);
-  const [solution, setSolution]     = useState<Board>([]);
-  const [cells, setCells]           = useState<CellState[][]>([]);
-  const [selected, setSelected]     = useState<[number, number] | null>(null);
-  const [peeking, setPeeking]       = useState(false);
-  const [won, setWon]               = useState(false);
-  const [peekCooldown, setPeekCooldown] = useState(false);
-  const [loading, setLoading]       = useState(true);
+async function apiReset(): Promise<RoomState | null> {
+  try {
+    const res = await fetch('/api/blitz/room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reset', username: 'admin' }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
 
-  const peekTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cooldownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Debounce save so we don't hammer the DB on every keystroke
-  const saveTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
+/* ─────────────────────── LoginScreen ─────────────────────── */
+function LoginScreen({ onLogin }: { onLogin: (u: AuthUser) => void }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
 
-  /* ── debounced save ── */
-  const scheduleSave = useCallback((
-    diff: Difficulty,
-    puz: Board,
-    sol: Board,
-    cls: CellState[][],
-    sel: [number, number] | null,
-    isWon: boolean,
-  ) => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      saveState({ difficulty: diff, puzzle: puz, solution: sol, cells: cls, selected: sel, won: isWon });
-    }, 400);
-  }, []);
-
-  /* ── start a fresh game (ignores any saved state) ── */
-  const newGame = useCallback((diff: Difficulty) => {
-    const { puzzle: puz, solution: sol } = generatePuzzle(diff);
-    const cls = buildCellStates(puz);
-    setPuzzle(puz);
-    setSolution(sol);
-    setCells(cls);
-    setSelected(null);
-    setPeeking(false);
-    setWon(false);
-    setPeekCooldown(false);
-    if (peekTimer.current) clearTimeout(peekTimer.current);
-    if (cooldownTimer.current) clearTimeout(cooldownTimer.current);
-    scheduleSave(diff, puz, sol, cls, null, false);
-  }, [scheduleSave]);
-
-  /* ── load saved state or start new on mount ── */
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const data = await loadState('easy');
-      if (data?.found) {
-        setPuzzle(data.puzzle);
-        setSolution(data.solution);
-        setCells(data.cells);
-        setSelected(data.selected ?? null);
-        setWon(data.won ?? false);
-      } else {
-        const { puzzle: puz, solution: sol } = generatePuzzle('easy');
-        const cls = buildCellStates(puz);
-        setPuzzle(puz);
-        setSolution(sol);
-        setCells(cls);
-        saveState({ difficulty: 'easy', puzzle: puz, solution: sol, cells: cls, selected: null, won: false });
-      }
-      setLoading(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /* ── switch difficulty: restore saved game or start new ── */
-  const handleDifficulty = useCallback(async (d: Difficulty) => {
-    if (d === difficulty) return;
-    setDifficulty(d);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username || !password) { setError('Select a player and enter your password'); return; }
     setLoading(true);
-    const data = await loadState(d);
-    if (data?.found) {
-      setPuzzle(data.puzzle);
-      setSolution(data.solution);
-      setCells(data.cells);
-      setSelected(data.selected ?? null);
-      setWon(data.won ?? false);
-      setPeeking(false);
-      setPeekCooldown(false);
-    } else {
-      newGame(d);
-    }
+    setError('');
+    const result = await apiAuth(username.trim(), password);
     setLoading(false);
-  }, [difficulty, newGame]);
+    if (typeof result === 'string') { setError(result); return; }
+    onLogin(result);
+  };
 
-  /* ── cell click ── */
-  const handleCellClick = (r: number, c: number) => {
-    if (won) return;
+  return (
+    <div className={styles.loginWrap}>
+      <div className={styles.loginCard}>
+        <div className={styles.loginLogo}>
+          <span className={styles.loginIcon}>⚡</span>
+          <h1 className={styles.loginTitle}>Blitz Sudoku</h1>
+          <p className={styles.loginSub}>1v1 · Real-time · 4×4 Blitz</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className={styles.loginForm}>
+          <div className={styles.fieldGroup}>
+            <label className={styles.fieldLabel}>Who are you?</label>
+            <div className={styles.playerBtns}>
+              {PLAYERS.map(p => (
+                <button
+                  key={p}
+                  type="button"
+                  className={`${styles.playerBtn} ${username === p ? styles.playerBtnActive : ''}`}
+                  onClick={() => setUsername(p)}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className={styles.fieldGroup}>
+            <label className={styles.fieldLabel}>Password</label>
+            <input
+              className={styles.input}
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </div>
+
+          {error && <p className={styles.loginError}>{error}</p>}
+
+          <button className={styles.loginBtn} type="submit" disabled={loading}>
+            {loading ? <span className={styles.spinner} /> : 'Sign In →'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────── TimerBar ─────────────────────── */
+function TimerBar({ total, left }: { total: number; left: number }) {
+  const pct     = Math.max(0, Math.min(100, (left / total) * 100));
+  const urgent  = left <= 15;
+  const warning = left <= 30;
+  return (
+    <div className={styles.timerWrap}>
+      <span className={`${styles.timerNum} ${urgent ? styles.timerUrgent : ''}`}>{fmt(left)}</span>
+      <div className={styles.timerTrack}>
+        <div
+          className={[
+            styles.timerFill,
+            urgent ? styles.timerFillUrgent : warning ? styles.timerFillWarning : '',
+          ].filter(Boolean).join(' ')}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────── ScoreBar ─────────────────────── */
+function ScoreBar({
+  me, opponent, room,
+}: {
+  me: string; opponent: string; room: RoomState;
+}) {
+  const myScore  = room.scores[me]?.total_score  ?? 0;
+  const oppScore = room.scores[opponent]?.total_score ?? 0;
+  const myWins   = room.scores[me]?.wins  ?? 0;
+  const oppWins  = room.scores[opponent]?.wins ?? 0;
+  const leading  = myScore > oppScore ? 'me' : myScore < oppScore ? 'opp' : 'tie';
+
+  return (
+    <div className={styles.scoreBar}>
+      <div className={`${styles.scorePlayer} ${styles.scoreMe}`}>
+        <span className={styles.scoreName}>{me}</span>
+        <span className={`${styles.scoreVal} ${leading === 'me' ? styles.scoreLeading : ''}`}>{myScore}</span>
+        <span className={styles.scoreWins}>{myWins}W</span>
+      </div>
+      <div className={styles.scoreCenter}>
+        <span className={styles.scoreVs}>VS</span>
+        {room.currentRound > 0 && (
+          <span className={styles.roundPill}>R{room.currentRound}</span>
+        )}
+      </div>
+      <div className={`${styles.scorePlayer} ${styles.scoreOpp}`}>
+        <span className={styles.scoreWins}>{oppWins}W</span>
+        <span className={`${styles.scoreVal} ${leading === 'opp' ? styles.scoreLeading : ''}`}>{oppScore}</span>
+        <span className={styles.scoreName}>{opponent}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────── Board4x4 ─────────────────────── */
+function Board4x4({
+  puzzle, userCells, selected, onCell, submitted,
+}: {
+  puzzle: Board4;
+  userCells: Board4;
+  selected: [number, number] | null;
+  onCell: (r: number, c: number) => void;
+  submitted: boolean;
+}) {
+  const display = buildDisplay(puzzle, userCells);
+
+  return (
+    <div className={styles.board}>
+      {display.map((row, r) =>
+        row.map((val, c) => {
+          const given    = isGiven(puzzle, r, c);
+          const isSel    = selected?.[0] === r && selected?.[1] === c;
+          const selVal   = selected ? display[selected[0]][selected[1]] : null;
+          const isRelated = selected
+            ? (r === selected[0] || c === selected[1] ||
+               (Math.floor(r / 2) === Math.floor(selected[0] / 2) &&
+                Math.floor(c / 2) === Math.floor(selected[1] / 2)))
+            : false;
+          const isSameNum = !isSel && !!selVal && val === selVal;
+          const boxRight  = c === 1;
+          const boxBottom = r === 1;
+
+          return (
+            <div
+              key={`${r}-${c}`}
+              className={[
+                styles.cell,
+                given        ? styles.cellGiven    : '',
+                isSel        ? styles.cellSelected : '',
+                isRelated && !isSel ? styles.cellRelated : '',
+                isSameNum    ? styles.cellSameNum  : '',
+                boxRight     ? styles.boxBorderR   : '',
+                boxBottom    ? styles.boxBorderB   : '',
+                submitted    ? styles.cellSubmitted: '',
+              ].filter(Boolean).join(' ')}
+              onClick={() => !submitted && !given && onCell(r, c)}
+            >
+              {val ?? ''}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────── MiniBoard ─────────────────────── */
+function MiniBoard({ cells, puzzle }: { cells: Board4 | null; puzzle: Board4 }) {
+  const display = cells ? buildDisplay(puzzle, cells) : puzzle;
+  return (
+    <div className={styles.miniBoard}>
+      {display.map((row, r) =>
+        row.map((val, c) => {
+          const given = isGiven(puzzle, r, c);
+          return (
+            <div
+              key={`${r}-${c}`}
+              className={[
+                styles.miniCell,
+                given    ? styles.miniGiven : '',
+                c === 1  ? styles.miniBoxR  : '',
+                r === 1  ? styles.miniBoxB  : '',
+              ].filter(Boolean).join(' ')}
+            >
+              {val ?? ''}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════ MAIN PAGE ═══════════════════ */
+export default function BlitzPage() {
+  const [user, setUser]           = useState<AuthUser | null>(null);
+  const [room, setRoom]           = useState<RoomState | null>(null);
+  const [userCells, setUserCells] = useState<Board4>(emptyBoard());
+  const [selected, setSelected]   = useState<[number, number] | null>(null);
+  const [localTime, setLocalTime] = useState(90);
+  const [prevRound, setPrevRound] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+
+  const pollRef  = useRef<ReturnType<typeof setTimeout>  | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const syncRef  = useRef<ReturnType<typeof setTimeout>  | null>(null);
+  const cellsRef = useRef<Board4>(emptyBoard());
+
+  const opponent = user ? PLAYERS.find(p => p !== user.username) ?? '' : '';
+
+  /* keep cellsRef in sync with state */
+  useEffect(() => { cellsRef.current = userCells; }, [userCells]);
+
+  /* ── poll loop ── */
+  const poll = useCallback(async () => {
+    const data = await apiGetRoom();
+    if (data) setRoom(data);
+    const delay = data?.status === 'playing' ? POLL_MS_PLAY : POLL_MS_LOBBY;
+    pollRef.current = setTimeout(poll, delay);
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    poll();
+    return () => { if (pollRef.current) clearTimeout(pollRef.current); };
+  }, [user, poll]);
+
+  /* ── local countdown ── */
+  useEffect(() => {
+    if (!room) return;
+    if (room.status === 'playing') {
+      setLocalTime(room.timeLeft);
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        setLocalTime(prev => Math.max(0, prev - 1));
+      }, 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.status, room?.roundStartedAt]);
+
+  /* ── new round detected → reset local board ── */
+  useEffect(() => {
+    if (!room || !user) return;
+    if (room.status === 'playing' && room.currentRound !== prevRound) {
+      setPrevRound(room.currentRound);
+      setSelected(null);
+      const blank = emptyBoard();
+      setUserCells(blank);
+      cellsRef.current = blank;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.currentRound, room?.status]);
+
+  /* ── debounced cell sync ── */
+  const scheduleCellSync = useCallback((cells: Board4) => {
+    if (syncRef.current) clearTimeout(syncRef.current);
+    syncRef.current = setTimeout(async () => {
+      if (user && room?.status === 'playing') {
+        await apiAction('update_cells', user.username, cells);
+      }
+    }, 600);
+  }, [user, room?.status]);
+
+  /* ── cell tap ── */
+  const handleCellTap = (r: number, c: number) => {
+    if (!room?.puzzle || room.status !== 'playing') return;
+    if (isGiven(room.puzzle, r, c)) return;
+    if (room.players[user!.username]?.submitted) return;
     setSelected([r, c]);
   };
 
-  /* ── enter number ── */
-  const handleNumber = useCallback((num: number) => {
-    if (!selected || won) return;
+  /* ── number entry ── */
+  const handleNum = useCallback((n: number) => {
+    if (!selected || !room?.puzzle || room.status !== 'playing') return;
+    if (room.players[user!.username]?.submitted) return;
     const [r, c] = selected;
-    setCells(prev => {
-      if (prev[r][c].given) return prev;
-      const next = prev.map(row => row.map(cell => ({ ...cell })));
-      next[r][c].value = num;
-      scheduleSave(difficulty, puzzle, solution, next, selected, won);
+    if (isGiven(room.puzzle, r, c)) return;
+    setUserCells(prev => {
+      const next = prev.map(row => [...row]) as Board4;
+      next[r][c] = n;
+      scheduleCellSync(next);
       return next;
     });
-  }, [selected, won, difficulty, puzzle, solution, scheduleSave]);
+  }, [selected, room, user, scheduleCellSync]);
 
   /* ── erase ── */
   const handleErase = useCallback(() => {
-    if (!selected || won) return;
+    if (!selected || !room?.puzzle || room.status !== 'playing') return;
+    if (room.players[user!.username]?.submitted) return;
     const [r, c] = selected;
-    setCells(prev => {
-      if (prev[r][c].given) return prev;
-      const next = prev.map(row => row.map(cell => ({ ...cell })));
-      next[r][c].value = null;
-      next[r][c].error = false;
-      scheduleSave(difficulty, puzzle, solution, next, selected, won);
+    if (isGiven(room.puzzle, r, c)) return;
+    setUserCells(prev => {
+      const next = prev.map(row => [...row]) as Board4;
+      next[r][c] = null;
+      scheduleCellSync(next);
       return next;
     });
-  }, [selected, won, difficulty, puzzle, solution, scheduleSave]);
+  }, [selected, room, user, scheduleCellSync]);
 
-  /* ── win detection ── */
-  useEffect(() => {
-    if (cells.length === 0 || solution.length === 0) return;
-    const board: Board = cells.map(row => row.map(c => c.value));
-    if (isBoardComplete(board, solution)) {
-      setWon(true);
-      scheduleSave(difficulty, puzzle, solution, cells, selected, true);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cells]);
+  /* ── submit ── */
+  const handleSubmit = async () => {
+    if (!user || !room || room.status !== 'playing') return;
+    if (room.players[user.username]?.submitted) return;
+    setSubmitting(true);
+    const data = await apiAction('submit', user.username, cellsRef.current);
+    if (data) setRoom(data);
+    setSubmitting(false);
+  };
 
-  /* ── save when selection changes ── */
-  useEffect(() => {
-    if (cells.length === 0 || loading) return;
-    scheduleSave(difficulty, puzzle, solution, cells, selected, won);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected]);
+  /* ── ready ── */
+  const handleReady = async () => {
+    if (!user) return;
+    const data = await apiAction('ready', user.username);
+    if (data) setRoom(data);
+  };
 
-  /* ── keyboard ── */
+  /* ── keyboard (desktop support) ── */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key >= '1' && e.key <= '9') handleNumber(parseInt(e.key));
+      if (e.key >= '1' && e.key <= '4') handleNum(parseInt(e.key));
       if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') handleErase();
-      if (!selected) return;
+      if (!selected || !room?.puzzle) return;
       const [r, c] = selected;
-      if (e.key === 'ArrowUp'    && r > 0) setSelected([r - 1, c]);
-      if (e.key === 'ArrowDown'  && r < 8) setSelected([r + 1, c]);
-      if (e.key === 'ArrowLeft'  && c > 0) setSelected([r, c - 1]);
-      if (e.key === 'ArrowRight' && c < 8) setSelected([r, c + 1]);
+      if (e.key === 'ArrowUp'    && r > 0) { e.preventDefault(); setSelected([r-1, c]); }
+      if (e.key === 'ArrowDown'  && r < 3) { e.preventDefault(); setSelected([r+1, c]); }
+      if (e.key === 'ArrowLeft'  && c > 0) { e.preventDefault(); setSelected([r, c-1]); }
+      if (e.key === 'ArrowRight' && c < 3) { e.preventDefault(); setSelected([r, c+1]); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [handleNumber, handleErase, selected]);
+  }, [handleNum, handleErase, selected, room]);
 
-  /* ── peek ── */
-  const handlePeek = () => {
-    if (peeking || peekCooldown || won) return;
-    setPeeking(true);
-    setPeekCooldown(true);
-    peekTimer.current    = setTimeout(() => setPeeking(false), 2000);
-    cooldownTimer.current = setTimeout(() => setPeekCooldown(false), 8000);
-  };
+  /* ──────────── render ──────────── */
+  if (!user) return <LoginScreen onLogin={setUser} />;
 
-  /* ── highlight logic ── */
-  const getHighlight = (r: number, c: number): string => {
-    if (!selected) return '';
-    const [sr, sc] = selected;
-    if (r === sr && c === sc) return 'selected';
-    const sameBox =
-      Math.floor(r / 3) === Math.floor(sr / 3) &&
-      Math.floor(c / 3) === Math.floor(sc / 3);
-    if (r === sr || c === sc || sameBox) return 'related';
-    const selVal = cells[sr][sc].value;
-    if (selVal && cells[r][c].value === selVal) return 'samenum';
-    return '';
-  };
+  if (!room) {
+    return (
+      <div className={styles.loading}>
+        <span className={styles.spinner} />
+        <span>Connecting…</span>
+      </div>
+    );
+  }
 
-  const selectedValue = selected ? cells[selected[0]]?.[selected[1]]?.value : null;
+  const myState      = room.players[user.username];
+  const oppState     = room.players[opponent];
+  const mySubmitted  = !!myState?.submitted;
+  const oppSubmitted = !!oppState?.submitted;
+  const myReady      = !!myState?.ready;
+  const oppReady     = !!oppState?.ready;
 
-  /* ─────────────────────────── render ─────────────────────────── */
+  const isWaiting  = room.status === 'waiting';
+  const isPlaying  = room.status === 'playing';
+  const isRoundEnd = room.status === 'round_end';
+
+  const myRoundScore  = myState?.score  ?? 0;
+  const oppRoundScore = oppState?.score ?? 0;
+  const iWon   = myRoundScore > oppRoundScore;
+  const isDraw = myRoundScore === oppRoundScore;
+
   return (
-    <div className={styles.page}>
+    <div className={styles.app}>
+
+      {/* ── Header ── */}
       <header className={styles.header}>
-        <div className={styles.logo}>
-          <span className={styles.logoIcon}>⬛</span>
-          <span>Sudoku</span>
+        <div className={styles.headerLeft}>
+          <span className={styles.bolt}>⚡</span>
+          <span className={styles.appName}>Blitz Sudoku</span>
         </div>
-        <p className={styles.tagline}>Classic 9×9 · Fill in the grid · One number per cell</p>
+        <div className={styles.headerRight}>
+          <span className={styles.headerUser}>{user.username}</span>
+          <button
+            className={styles.menuBtn}
+            onClick={() => setShowReset(v => !v)}
+            title="Options"
+          >⋯</button>
+          <button className={styles.logoutBtn} onClick={() => { setUser(null); setRoom(null); }} title="Sign out">✕</button>
+        </div>
       </header>
 
-      <main className={styles.main}>
-        {/* Controls top */}
-        <div className={styles.topControls}>
-          <div className={styles.diffRow}>
-            {(['extra-easy', 'easy', 'medium', 'hard'] as Difficulty[]).map(d => (
-              <button
-                key={d}
-                className={`${styles.diffBtn} ${difficulty === d ? styles.diffActive : ''}`}
-                onClick={() => handleDifficulty(d)}
-              >
-                {d === 'extra-easy' ? '★ Easy' : d.charAt(0).toUpperCase() + d.slice(1)}
-              </button>
-            ))}
-          </div>
-          <button className={styles.newBtn} onClick={() => newGame(difficulty)}>
-            <span>↺</span> New Puzzle
-          </button>
+      {/* ── Reset confirm ── */}
+      {showReset && (
+        <div className={styles.resetBanner}>
+          <span>Reset all scores &amp; rounds?</span>
+          <button
+            className={styles.resetConfirmBtn}
+            onClick={async () => {
+              const d = await apiReset();
+              if (d) setRoom(d);
+              setShowReset(false);
+            }}
+          >Reset</button>
+          <button className={styles.resetCancelBtn} onClick={() => setShowReset(false)}>Cancel</button>
         </div>
+      )}
 
-        {/* Board */}
-        <div className={styles.boardWrapper}>
-          {/* Loading overlay */}
-          {loading && (
-            <div className={styles.loadingOverlay}>
-              <div className={styles.loadingSpinner} />
+      {/* ── Score bar ── */}
+      <ScoreBar me={user.username} opponent={opponent} room={room} />
+
+      {/* ══ WAITING LOBBY ══ */}
+      {isWaiting && (
+        <div className={styles.lobby}>
+          <div className={styles.lobbyCard}>
+            <div className={styles.lobbyBadge}>⚡ BLITZ</div>
+            <div className={styles.lobbyTitle}>Waiting Room</div>
+            <div className={styles.lobbyRound}>
+              {room.currentRound === 0 ? 'First match!' : `After round ${room.currentRound}`}
             </div>
-          )}
 
-          {won && !loading && (
-            <div className={styles.wonOverlay}>
-              <div className={styles.wonCard}>
-                <div className={styles.wonEmoji}>🎉</div>
-                <div className={styles.wonTitle}>Puzzle Solved!</div>
-                <div className={styles.wonSub}>Brilliant work. Ready for another?</div>
-                <button className={styles.wonBtn} onClick={() => newGame(difficulty)}>New Puzzle</button>
-              </div>
-            </div>
-          )}
-
-          <div
-            className={`${styles.board} ${loading ? styles.boardLoading : ''}`}
-            role="grid"
-            aria-label="Sudoku board"
-          >
-            {cells.map((row, r) =>
-              row.map((cell, c) => {
-                const hl = getHighlight(r, c);
-                const isPeekCell  = peeking && !cell.given && !cell.value;
-                const displayVal  = isPeekCell ? solution[r]?.[c] : cell.value;
-
+            <div className={styles.lobbyPlayers}>
+              {PLAYERS.map(p => {
+                const isMe = p === user.username;
+                const ready = isMe ? myReady : oppReady;
                 return (
-                  <div
-                    key={`${r}-${c}`}
-                    role="gridcell"
-                    aria-selected={hl === 'selected'}
-                    className={[
-                      styles.cell,
-                      hl === 'selected' ? styles.cellSelected  : '',
-                      hl === 'related'  ? styles.cellRelated   : '',
-                      hl === 'samenum'  ? styles.cellSameNum   : '',
-                      cell.given        ? styles.cellGiven      : '',
-                      isPeekCell        ? styles.cellPeek       : '',
-                      c % 3 === 2 && c !== 8 ? styles.boxBorderRight  : '',
-                      r % 3 === 2 && r !== 8 ? styles.boxBorderBottom : '',
-                    ].filter(Boolean).join(' ')}
-                    onClick={() => handleCellClick(r, c)}
-                  >
-                    {displayVal ?? ''}
+                  <div key={p} className={`${styles.lobbyPlayer} ${ready ? styles.lobbyPlayerReady : ''}`}>
+                    <span className={styles.lobbyDot}>{ready ? '✓' : '○'}</span>
+                    <span className={styles.lobbyName}>{p} {isMe ? '(you)' : ''}</span>
+                    <span className={styles.lobbyStatus}>{ready ? 'Ready' : 'Waiting…'}</span>
                   </div>
                 );
-              })
+              })}
+            </div>
+
+            <p className={styles.lobbyHint}>Both players tap Ready to start the round</p>
+
+            <button
+              className={`${styles.readyBtn} ${myReady ? styles.readyBtnDone : ''}`}
+              onClick={handleReady}
+              disabled={myReady}
+            >
+              {myReady ? '✓ You\'re Ready!' : 'Ready to Play ⚡'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ══ PLAYING ══ */}
+      {isPlaying && room.puzzle && (
+        <div className={styles.playArea}>
+          <TimerBar total={room.roundDuration} left={localTime} />
+
+          <div className={styles.playTopRow}>
+            <div className={styles.roundBadge}>Round {room.currentRound}</div>
+            <div className={styles.opponentStatus}>
+              <span className={styles.opponentLabel}>{opponent}</span>
+              <span className={`${styles.oppStatusDot} ${oppSubmitted ? styles.oppDone : styles.oppActive}`} />
+              <span className={styles.oppStatusText}>{oppSubmitted ? 'Submitted ✓' : 'Playing…'}</span>
+            </div>
+          </div>
+
+          {/* Opponent mini-board */}
+          <div className={styles.opponentRow}>
+            <MiniBoard cells={oppState?.cells ?? null} puzzle={room.puzzle} />
+          </div>
+
+          {/* Main board */}
+          <Board4x4
+            puzzle={room.puzzle}
+            userCells={userCells}
+            selected={mySubmitted ? null : selected}
+            onCell={handleCellTap}
+            submitted={mySubmitted}
+          />
+
+          {/* Numpad */}
+          {!mySubmitted && (
+            <div className={styles.numpad}>
+              {[1, 2, 3, 4].map(n => (
+                <button key={n} className={styles.numBtn} onClick={() => handleNum(n)}>
+                  {n}
+                </button>
+              ))}
+              <button className={`${styles.numBtn} ${styles.eraseBtn}`} onClick={handleErase}>
+                ⌫
+              </button>
+            </div>
+          )}
+
+          {/* Submit / waiting */}
+          {!mySubmitted ? (
+            <button className={styles.submitBtn} onClick={handleSubmit} disabled={submitting}>
+              {submitting
+                ? <><span className={styles.spinner} /> Submitting…</>
+                : 'Submit Answer ⚡'
+              }
+            </button>
+          ) : (
+            <div className={styles.waitingOpponent}>
+              {oppSubmitted
+                ? <span className={styles.bothDone}>Both submitted! Calculating…</span>
+                : <><span className={styles.spinner} /><span>Waiting for {opponent}…</span></>
+              }
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ ROUND END ══ */}
+      {isRoundEnd && (
+        <div className={styles.roundEnd}>
+          <div className={styles.roundEndCard}>
+            <div className={styles.roundEndEmoji}>
+              {isDraw ? '🤝' : iWon ? '🏆' : '😤'}
+            </div>
+            <div className={`${styles.roundEndTitle} ${iWon ? styles.titleWin : isDraw ? styles.titleDraw : styles.titleLoss}`}>
+              {isDraw ? "It's a draw!" : iWon ? 'You won this round!' : `${opponent} wins this round!`}
+            </div>
+
+            <div className={styles.roundScores}>
+              <div className={`${styles.rScore} ${iWon ? styles.rScoreWin : ''}`}>
+                <span className={styles.rName}>{user.username}</span>
+                <span className={styles.rPoints}>{myRoundScore}</span>
+                <span className={styles.rPts}>pts</span>
+              </div>
+              <div className={styles.rDivider}>vs</div>
+              <div className={`${styles.rScore} ${!iWon && !isDraw ? styles.rScoreWin : ''}`}>
+                <span className={styles.rName}>{opponent}</span>
+                <span className={styles.rPoints}>{oppRoundScore}</span>
+                <span className={styles.rPts}>pts</span>
+              </div>
+            </div>
+
+            {myRoundScore === 0 && !isDraw && (
+              <p className={styles.scoreHint}>Incorrect solution = 0 pts</p>
+            )}
+            {myRoundScore > 100 && (
+              <p className={styles.scoreHint}>Base 100 + {myRoundScore - 100} speed bonus 🚀</p>
+            )}
+
+            <div className={styles.totalScores}>
+              <span className={styles.totalLabel}>Overall</span>
+              <span className={styles.totalEntry}>
+                {user.username}: <strong>{room.scores[user.username]?.total_score ?? 0}</strong>
+              </span>
+              <span className={styles.totalSep}>·</span>
+              <span className={styles.totalEntry}>
+                {opponent}: <strong>{room.scores[opponent]?.total_score ?? 0}</strong>
+              </span>
+            </div>
+
+            <button
+              className={`${styles.readyBtn} ${myReady ? styles.readyBtnDone : ''}`}
+              onClick={handleReady}
+              disabled={myReady}
+            >
+              {myReady ? '✓ Ready for next round!' : 'Next Round ⚡'}
+            </button>
+            {oppReady && !myReady && (
+              <p className={styles.lobbyHint}>{opponent} is ready — waiting for you!</p>
             )}
           </div>
         </div>
-
-        {/* Number pad */}
-        <div className={styles.numpad}>
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
-            <button
-              key={n}
-              className={`${styles.numBtn} ${selectedValue === n ? styles.numActive : ''}`}
-              onClick={() => handleNumber(n)}
-              aria-label={`Enter ${n}`}
-            >
-              {n}
-            </button>
-          ))}
-          <button
-            className={`${styles.numBtn} ${styles.eraseBtn}`}
-            onClick={handleErase}
-            aria-label="Erase cell"
-          >
-            ⌫
-          </button>
-        </div>
-
-        {/* Action row */}
-        <div className={styles.actionRow}>
-          <button
-            className={`${styles.peekBtn} ${peeking ? styles.peekActive : ''} ${peekCooldown && !peeking ? styles.peekCooldown : ''}`}
-            onClick={handlePeek}
-            disabled={peekCooldown || won}
-          >
-            {peeking ? (
-              <><span className={styles.peekIcon}>👁</span> Peeking…</>
-            ) : peekCooldown ? (
-              <><span className={styles.peekIcon}>⏳</span> Cooldown…</>
-            ) : (
-              <><span className={styles.peekIcon}>👁</span> Peek Answer (2s)</>
-            )}
-          </button>
-        </div>
-
-        {/* Instructions */}
-        <div className={styles.instructions}>
-          <span>Click a cell, then tap a number</span>
-          <span className={styles.dot}>·</span>
-          <span>Keyboard arrows &amp; 1–9 work too</span>
-          <span className={styles.dot}>·</span>
-          <span>Progress saved automatically</span>
-        </div>
-      </main>
-
-      <footer className={styles.footer}>
-        <span>Classic Sudoku · Every puzzle has exactly one solution</span>
-      </footer>
+      )}
     </div>
   );
 }

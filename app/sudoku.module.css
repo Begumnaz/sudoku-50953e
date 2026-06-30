@@ -13,8 +13,18 @@
   width: 100%;
   max-width: 560px;
   text-align: center;
-  padding: 36px 0 20px;
+  padding: 24px 0 20px;
 }
+
+.backLink {
+  display: inline-block;
+  margin-bottom: 14px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.backLink:active { color: var(--text); }
 
 .logo {
   display: flex;

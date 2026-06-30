@@ -43,13 +43,23 @@ export function getDb(): Database.Database {
     )
   `);
 
-  // Seed the two hard-coded players (INSERT OR IGNORE so we never overwrite)
+  // Seed the two hard-coded players (INSERT OR IGNORE so we never overwrite
+  // an existing row's score/wins on the deployed Railway volume).
   const insertUser = _db.prepare(`
     INSERT OR IGNORE INTO blitz_users (username, password, total_score, wins, losses)
     VALUES (?, ?, 0, 0, 0)
   `);
   insertUser.run('Edin',  'edin123');
   insertUser.run('Begus', 'begus123');
+
+  // Force-reset passwords from Railway env vars when present. The prod volume
+  // already holds seeded users whose passwords we don't know, and INSERT OR
+  // IGNORE never overwrites them — so this is the supported way to (re)set a
+  // known password without putting secrets in the repo. Set BLITZ_EDIN_PASSWORD
+  // / BLITZ_BEGUS_PASSWORD in Railway and redeploy.
+  const setPassword = _db.prepare('UPDATE blitz_users SET password = ? WHERE username = ?');
+  if (process.env.BLITZ_EDIN_PASSWORD)  setPassword.run(process.env.BLITZ_EDIN_PASSWORD,  'Edin');
+  if (process.env.BLITZ_BEGUS_PASSWORD) setPassword.run(process.env.BLITZ_BEGUS_PASSWORD, 'Begus');
 
   // ── Blitz: rooms (one shared room for the pair) ──
   _db.exec(`

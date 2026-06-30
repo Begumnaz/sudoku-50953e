@@ -878,3 +878,90 @@
 }
 .totalEntry strong { color: var(--text); }
 .totalSep { color: var(--text-dim); }
+
+/* ══════════════════════════════════════
+   ADDITIONS — nav, 9×9 board, bonus, skip
+══════════════════════════════════════ */
+
+/* Back-to-menu chevron in the header */
+.homeBtn {
+  width: 30px;
+  height: 30px;
+  background: var(--surface2);
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 1.3rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.homeBtn:active { background: var(--surface3); color: var(--text); }
+
+/* Back link on the login card */
+.backLink {
+  display: block;
+  margin-top: 22px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+.backLink:active { color: var(--text); }
+
+/* 9×9 bonus board — tighter grid + smaller glyphs */
+.board9 {
+  max-width: 360px;
+  gap: 2px;
+  padding: 4px;
+}
+.board9 .cell {
+  font-size: 1.05rem;
+  border-radius: 4px;
+  font-weight: 800;
+}
+
+/* Gold bonus variant of the round badge */
+.bonusBadge {
+  color: var(--gold) !important;
+  background: rgba(255,209,102,0.12) !important;
+  box-shadow: 0 0 16px rgba(255,209,102,0.2);
+}
+
+/* Submit + skip stacked */
+.actionStack {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.skipBtn {
+  width: 100%;
+  padding: 11px;
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  transition: all 0.15s;
+}
+.skipBtn:active:not(:disabled) { transform: scale(0.97); background: var(--surface2); }
+.skipBtn:disabled { opacity: 0.5; }
+
+/* Match-end tag under the title */
+.matchTag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(124,106,255,0.1);
+  border: 1px solid rgba(124,106,255,0.2);
+  padding: 4px 12px;
+  border-radius: 20px;
+  letter-spacing: 0.03em;
+}

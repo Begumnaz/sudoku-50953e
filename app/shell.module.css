@@ -1,0 +1,198 @@
+/* ═══════════════════════════════════════════════
+   Shared shell styles — Home menu + Stats screen
+═══════════════════════════════════════════════ */
+
+.wrap {
+  width: 100%;
+  max-width: 420px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0 18px 32px;
+}
+
+/* ── Hero ── */
+.hero {
+  text-align: center;
+  padding: 56px 0 28px;
+}
+.heroIcon {
+  display: block;
+  font-size: 3.2rem;
+  margin-bottom: 12px;
+  filter: drop-shadow(0 0 22px var(--accent));
+}
+.heroTitle {
+  font-size: 2.1rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  background: linear-gradient(140deg, #fff 30%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.1;
+}
+.heroSub {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── Menu ── */
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.tile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  text-decoration: none;
+  transition: all 0.18s;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.3);
+}
+.tile:active { transform: scale(0.98); border-color: var(--accent); }
+
+.tileIcon {
+  font-size: 1.9rem;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface2);
+  border-radius: 14px;
+}
+.tileBody { display: flex; flex-direction: column; gap: 3px; }
+.tileTitle { font-size: 1.15rem; font-weight: 800; color: var(--text); letter-spacing: -0.01em; }
+.tileSub   { font-size: 0.82rem; color: var(--text-muted); }
+.tileArrow { margin-left: auto; color: var(--text-dim); font-size: 1.3rem; }
+
+.tilePractice .tileIcon { color: var(--green); }
+.tileBlitz    .tileIcon { color: var(--gold); }
+.tileStats    .tileIcon { color: var(--accent2); }
+
+.footer {
+  margin-top: auto;
+  padding: 24px 0 4px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.74rem;
+}
+
+/* ── Stats screen ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 0 8px;
+}
+.backChev {
+  width: 34px;
+  height: 34px;
+  background: var(--surface2);
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.topTitle { font-size: 1.2rem; font-weight: 800; color: var(--text); }
+
+.h2h {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 18px;
+}
+.h2hCol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 22px 10px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.h2hLead { border-color: var(--gold); background: rgba(255,209,102,0.06); }
+.h2hName {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.h2hWins {
+  font-size: 3rem;
+  font-weight: 900;
+  color: var(--text);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.h2hLead .h2hWins { color: var(--gold); text-shadow: 0 0 22px var(--gold-glow); }
+.h2hWinsLabel {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.h2hVs {
+  align-self: center;
+  font-size: 0.8rem;
+  font-weight: 900;
+  color: var(--text-dim);
+}
+
+.statRows {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.statRow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--surface);
+}
+.statRow .me   { text-align: left;  font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.statRow .opp  { text-align: right; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.statRow .lbl  {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.loadingRow {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px 0;
+  font-size: 0.9rem;
+}

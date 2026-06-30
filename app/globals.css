@@ -26,6 +26,13 @@
   --radius:        14px;
   --radius-sm:     8px;
   --radius-lg:     20px;
+
+  /* Aliases used by the Practice-mode stylesheet (sudoku.module.css) */
+  --border-thick:  #3d4270;
+  --success:       #06d6a0;
+  --peek:          #ffd166;
+  --given:         #e8eaff;
+  --user:          #7c6aff;
 }
 
 html {

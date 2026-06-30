@@ -1,0 +1,123 @@
+.page {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 18px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ── gate (locked) ── */
+.gateCard {
+  width: 100%;
+  max-width: 360px;
+  margin: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.gateIcon { font-size: 2.4rem; }
+.gateTitle { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+.gateSub { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 6px; }
+.gateForm { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+
+.input {
+  width: 100%;
+  padding: 13px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 1rem;
+  outline: none;
+}
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+/* ── header (unlocked) ── */
+.header { display: flex; flex-direction: column; gap: 6px; }
+.logo { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; }
+.tagline { font-size: 0.85rem; color: var(--text-muted); }
+
+.main { display: flex; flex-direction: column; gap: 18px; }
+
+/* ── setting group ── */
+.group {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.groupLabel { font-size: 0.92rem; font-weight: 700; color: var(--text); }
+.hint { font-size: 0.78rem; color: var(--text-muted); }
+
+/* ── segmented control ── */
+.segmented {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.segBtn {
+  flex: 1 1 auto;
+  min-width: 56px;
+  padding: 11px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.segBtn:hover { border-color: var(--border-bright); }
+.segActive {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+/* ── buttons / messages ── */
+.primaryBtn {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+  border: none;
+  border-radius: var(--radius);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 24px var(--accent-glow);
+}
+.primaryBtn:disabled { opacity: 0.6; cursor: default; }
+
+.error {
+  color: var(--red);
+  font-size: 0.85rem;
+  text-align: center;
+}
+.footnote {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.backLink {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.88rem;
+  align-self: flex-start;
+}
+.backLink:hover { color: var(--text); }
+.gateCard .backLink { align-self: center; margin-top: 4px; }

@@ -39,6 +39,10 @@ export default function HomePage() {
         </Link>
       </nav>
 
+      <Link href="/admin" className={styles.adminBtn}>
+        ⚙️ Admin &amp; Difficulty
+      </Link>
+
       <footer className={styles.footer}>
         Private 2-player Sudoku · portrait, mobile-first
       </footer>

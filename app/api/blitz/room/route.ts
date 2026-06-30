@@ -3,15 +3,15 @@ import { getDb } from '@/lib/db';
 import { generate4x4 } from '@/lib/sudoku4';
 import { generatePuzzle } from '@/lib/sudoku';
 import {
-  boardSizeForRound,
-  durationForRound,
-  isBonusRound,
   computeScore,
   ROUNDS_PER_MATCH,
   roundInMatch,
   matchNumberForRound,
   isMatchEndingRound,
+  resolveRound,
+  type PuzzleSize,
 } from '@/lib/models';
+import { readBlitzSettings } from '@/lib/blitzSettings';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +27,8 @@ type RoomRow = {
   solution: string | null;
   round_started_at: string | null;
   round_duration: number;
+  board_size: number;
+  is_bonus: number;
   updated_at: string;
 };
 
@@ -146,12 +148,13 @@ function finalizeRound(db: ReturnType<typeof getDb>, room: RoomRow): void {
   tx();
 }
 
-/** Start the given round: generate a board sized for it and begin the timer. */
+/** Start the given round: generate a board sized for it (per admin settings)
+ *  and begin the timer. */
 function startRound(db: ReturnType<typeof getDb>, nextRound: number): void {
-  const size = boardSizeForRound(nextRound);
-  const duration = durationForRound(nextRound);
+  const settings = readBlitzSettings(db);
+  const { isBonus, boardSize, durationSeconds, difficulty } = resolveRound(nextRound, settings);
   const { puzzle, solution } =
-    size === 9 ? generatePuzzle('easy') : generate4x4(8);
+    boardSize === 9 ? generatePuzzle(difficulty) : generate4x4(8);
 
   const startTx = db.transaction(() => {
     db.prepare(`
@@ -161,10 +164,20 @@ function startRound(db: ReturnType<typeof getDb>, nextRound: number): void {
           puzzle = ?,
           solution = ?,
           round_duration = ?,
+          board_size = ?,
+          is_bonus = ?,
           round_started_at = datetime('now'),
           updated_at = datetime('now')
       WHERE id = ?
-    `).run(nextRound, JSON.stringify(puzzle), JSON.stringify(solution), duration, ROOM_ID);
+    `).run(
+      nextRound,
+      JSON.stringify(puzzle),
+      JSON.stringify(solution),
+      durationSeconds,
+      boardSize,
+      isBonus ? 1 : 0,
+      ROOM_ID,
+    );
 
     db.prepare('DELETE FROM blitz_player_state WHERE room_id = ? AND round = ?')
       .run(ROOM_ID, nextRound);
@@ -213,16 +226,22 @@ function buildRoomPayload(db: ReturnType<typeof getDb>, room: RoomRow) {
     timeLeft = Math.max(0, room.round_duration - Math.floor(elapsedSeconds(room)));
   }
 
+  // The live puzzle is the source of truth for board size; is_bonus is stored
+  // on the room when the round starts (can't be inferred from size alone, since
+  // a normal round may now also be 9×9).
+  const parsedPuzzle = room.puzzle ? JSON.parse(room.puzzle) : null;
+  const boardSize = parsedPuzzle ? parsedPuzzle.length : room.board_size;
+
   return {
     roomId:         ROOM_ID,
     status:         room.status,
     currentRound:   room.current_round,
-    boardSize:      boardSizeForRound(room.current_round),
-    isBonus:        isBonusRound(room.current_round),
+    boardSize,
+    isBonus:        !!room.is_bonus,
     matchNumber:    matchNumberForRound(room.current_round),
     roundInMatch:   roundInMatch(room.current_round),
     roundsPerMatch: ROUNDS_PER_MATCH,
-    puzzle:         room.puzzle  ? JSON.parse(room.puzzle)   : null,
+    puzzle:         parsedPuzzle,
     solution:       room.solution ? JSON.parse(room.solution) : null,
     roundDuration:  room.round_duration,
     timeLeft,
@@ -324,7 +343,7 @@ export async function POST(req: NextRequest) {
     if (!username) return NextResponse.json({ error: 'missing username' }, { status: 400 });
     if (room.status !== 'playing')
       return NextResponse.json({ error: 'not playing' }, { status: 400 });
-    if (action === 'skip' && !isBonusRound(room.current_round))
+    if (action === 'skip' && !room.is_bonus)
       return NextResponse.json({ error: 'not a bonus round' }, { status: 400 });
     if (action === 'submit' && cells === undefined)
       return NextResponse.json({ error: 'missing fields' }, { status: 400 });
@@ -344,7 +363,7 @@ export async function POST(req: NextRequest) {
       const solution = room.solution ? JSON.parse(room.solution) : null;
       const puzzle   = room.puzzle   ? JSON.parse(room.puzzle)   : null;
       const remaining = Math.max(0, room.round_duration - Math.floor(elapsedSeconds(room)));
-      const size = boardSizeForRound(room.current_round);
+      const size: PuzzleSize = puzzle && puzzle.length === 9 ? 9 : 4;
       const solved = isSolved(mergeGivens(puzzle, cells), solution);
       score = computeScore(size, solved, remaining).total;
       savedCells = JSON.stringify(cells);

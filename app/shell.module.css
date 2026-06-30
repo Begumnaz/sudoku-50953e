@@ -83,6 +83,28 @@
 .tileBlitz    .tileIcon { color: var(--gold); }
 .tileStats    .tileIcon { color: var(--accent2); }
 
+.adminBtn {
+  margin-top: 18px;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius, 14px);
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.adminBtn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--surface2);
+}
+
 .footer {
   margin-top: auto;
   padding: 24px 0 4px;

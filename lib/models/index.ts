@@ -4,9 +4,11 @@
 //   Round  — one cumulative round + the round/board math
 //   Match  — a 2-round group derived from the round counter
 //   Score  — round scoring rules and constants
+//   Settings — admin-tunable challenge knobs (board size, timers, bonus)
 
 export * from './Puzzle';
 export * from './Player';
 export * from './Round';
 export * from './Match';
 export * from './Score';
+export * from './Settings';

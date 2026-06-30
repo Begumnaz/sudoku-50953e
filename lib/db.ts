@@ -10,6 +10,21 @@ const DB_DIR = path.dirname(DB_PATH);
 
 let _db: Database.Database | null = null;
 
+/** Add a column to an existing table only if it isn't already there (SQLite has
+ *  no ADD COLUMN IF NOT EXISTS), so prod volumes created before the column get
+ *  migrated in place without wiping data. */
+function addColumnIfMissing(
+  db: Database.Database,
+  table: string,
+  column: string,
+  definition: string,
+): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some(c => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 export function getDb(): Database.Database {
   if (_db) return _db;
 
@@ -71,9 +86,29 @@ export function getDb(): Database.Database {
       solution      TEXT,
       round_started_at TEXT,
       round_duration   INTEGER NOT NULL DEFAULT 90,
+      board_size    INTEGER NOT NULL DEFAULT 4,
+      is_bonus      INTEGER NOT NULL DEFAULT 0,
       updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
+
+  // Migrate existing prod rooms tables that predate board_size / is_bonus.
+  addColumnIfMissing(_db, 'blitz_rooms', 'board_size', 'INTEGER NOT NULL DEFAULT 4');
+  addColumnIfMissing(_db, 'blitz_rooms', 'is_bonus',   'INTEGER NOT NULL DEFAULT 0');
+
+  // ── Blitz: admin-tunable settings (single shared row) ──
+  _db.exec(`
+    CREATE TABLE IF NOT EXISTS blitz_settings (
+      id                TEXT PRIMARY KEY,
+      normal_board_size INTEGER NOT NULL DEFAULT 4,
+      normal_seconds    INTEGER NOT NULL DEFAULT 90,
+      bonus_seconds     INTEGER NOT NULL DEFAULT 240,
+      bonus_every       INTEGER NOT NULL DEFAULT 10,
+      bonus_difficulty  TEXT NOT NULL DEFAULT 'easy',
+      normal_difficulty TEXT NOT NULL DEFAULT 'easy'
+    )
+  `);
+  _db.prepare(`INSERT OR IGNORE INTO blitz_settings (id) VALUES ('global')`).run();
 
   // ── Blitz: per-player per-round state ──
   _db.exec(`

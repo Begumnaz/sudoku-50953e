@@ -23,6 +23,11 @@ export const dynamic = 'force-dynamic';
 const ROOM_ID = 'edin-vs-begus';
 const DEFAULT_DURATION = 90; // seconds; the per-round value is stored on the room
 const READY_SENTINEL = '__ready__';
+// When both players are ready we set round_started_at this many seconds in the
+// FUTURE, so both phones run a synchronized 3·2·1 countdown and the timer +
+// input begin at the same wall-clock instant — no head start for whoever's poll
+// happens to land first.
+const COUNTDOWN_SECONDS = 3;
 
 type RoomRow = {
   id: string;
@@ -90,10 +95,23 @@ function safeParseCells(raw: string | null): (number | null)[][] | null {
   catch { return null; }
 }
 
-/** Elapsed seconds since the round started (0 if not started). */
+/** Elapsed seconds since the round started; negative during the pre-round
+ *  countdown (round_started_at is in the future). 0 if not started. */
 function elapsedSeconds(room: RoomRow): number {
   if (!room.round_started_at) return 0;
   return (Date.now() - new Date(room.round_started_at + 'Z').getTime()) / 1000;
+}
+
+/** Whole seconds until the round actually begins (during the countdown), else 0. */
+function startsInSeconds(room: RoomRow): number {
+  if (!room.round_started_at || room.status !== 'playing') return 0;
+  const ms = new Date(room.round_started_at + 'Z').getTime() - Date.now();
+  return ms > 0 ? Math.ceil(ms / 1000) : 0;
+}
+
+/** True once the countdown is over and the round is actually playable. */
+function roundLive(room: RoomRow): boolean {
+  return room.status === 'playing' && !!room.round_started_at && elapsedSeconds(room) >= 0;
 }
 
 /**
@@ -213,7 +231,7 @@ function startRound(db: ReturnType<typeof getDb>, nextRound: number): void {
           round_duration = ?,
           board_size = ?,
           is_bonus = ?,
-          round_started_at = datetime('now'),
+          round_started_at = datetime('now', ?),
           updated_at = datetime('now')
       WHERE id = ?
     `).run(
@@ -223,6 +241,7 @@ function startRound(db: ReturnType<typeof getDb>, nextRound: number): void {
       durationSeconds,
       boardSize,
       isBonus ? 1 : 0,
+      `+${COUNTDOWN_SECONDS} seconds`,
       ROOM_ID,
     );
 
@@ -286,9 +305,14 @@ function buildRoomPayload(db: ReturnType<typeof getDb>, room: RoomRow) {
     };
   }
 
+  // Clamp to the round duration so the pre-round countdown (negative elapsed)
+  // doesn't show more than a full clock.
   let timeLeft = room.round_duration;
   if (room.round_started_at && room.status === 'playing') {
-    timeLeft = Math.max(0, room.round_duration - Math.floor(elapsedSeconds(room)));
+    timeLeft = Math.min(
+      room.round_duration,
+      Math.max(0, room.round_duration - Math.floor(elapsedSeconds(room))),
+    );
   }
 
   // The live puzzle is the source of truth for board size; is_bonus is stored
@@ -310,6 +334,7 @@ function buildRoomPayload(db: ReturnType<typeof getDb>, room: RoomRow) {
     solution:       room.solution ? JSON.parse(room.solution) : null,
     roundDuration:  room.round_duration,
     timeLeft,
+    startsInSeconds: startsInSeconds(room),
     roundStartedAt: room.round_started_at,
     players:        playerMap,
     scores,
@@ -408,6 +433,8 @@ export async function POST(req: NextRequest) {
     if (!username) return NextResponse.json({ error: 'missing username' }, { status: 400 });
     if (room.status !== 'playing')
       return NextResponse.json({ error: 'not playing' }, { status: 400 });
+    if (!roundLive(room))
+      return NextResponse.json({ error: 'round has not started' }, { status: 400 });
     if (action === 'skip' && !room.is_bonus)
       return NextResponse.json({ error: 'not a bonus round' }, { status: 400 });
     if (action === 'submit' && cells === undefined)
@@ -427,7 +454,7 @@ export async function POST(req: NextRequest) {
     if (action === 'submit') {
       const solution = room.solution ? JSON.parse(room.solution) : null;
       const puzzle   = room.puzzle   ? JSON.parse(room.puzzle)   : null;
-      const remaining = Math.max(0, room.round_duration - Math.floor(elapsedSeconds(room)));
+      const remaining = Math.max(0, Math.min(room.round_duration, room.round_duration - Math.floor(elapsedSeconds(room))));
       const size: PuzzleSize =
         puzzle && puzzle.length === 9 ? 9 : puzzle && puzzle.length === 6 ? 6 : 4;
       const solved = isSolved(mergeGivens(puzzle, cells), solution);
@@ -459,6 +486,8 @@ export async function POST(req: NextRequest) {
     if (!username) return NextResponse.json({ error: 'missing username' }, { status: 400 });
     if (room.status !== 'playing')
       return NextResponse.json({ error: 'not playing' }, { status: 400 });
+    if (!roundLive(room))
+      return NextResponse.json({ error: 'round has not started' }, { status: 400 });
 
     const getPS = (u: string) =>
       db.prepare('SELECT * FROM blitz_player_state WHERE room_id = ? AND round = ? AND username = ?')

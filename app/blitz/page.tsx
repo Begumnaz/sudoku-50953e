@@ -37,6 +37,7 @@ interface RoomState {
   solution: BoardN | null;
   roundDuration: number;
   timeLeft: number;
+  startsInSeconds: number;
   roundStartedAt: string | null;
   players: Record<string, PlayerState>;
   scores: Record<string, { total_score: number; wins: number; losses: number }>;
@@ -52,7 +53,9 @@ interface AuthUser {
 
 const PLAYERS = ['Edin', 'Begus'] as const;
 const POLL_MS_PLAY  = 800;
-const POLL_MS_LOBBY = 2000;
+// Lobby polls fast enough that the player who readied first still catches the
+// shared start countdown well before it ends.
+const POLL_MS_LOBBY = 1000;
 
 /* Piñata-burst confetti: precomputed radial directions so each piece flies out
    at its own angle/distance/spin. Pure CSS animation, no library. */
@@ -406,6 +409,7 @@ export default function BlitzPage() {
   const [userCells, setUserCells] = useState<BoardN>(emptyBoard(4));
   const [selected, setSelected]   = useState<[number, number] | null>(null);
   const [localTime, setLocalTime] = useState(90);
+  const [countdown, setCountdown] = useState(0);
   const [prevRound, setPrevRound] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [showReset, setShowReset] = useState(false);
@@ -415,6 +419,7 @@ export default function BlitzPage() {
   const syncRef  = useRef<ReturnType<typeof setTimeout>  | null>(null);
   const cellsRef = useRef<BoardN>(emptyBoard(4));
   const frozenRef = useRef(false);
+  const countingRef = useRef(false);
   const lastResync = useRef<string | null>(null);
 
   const size     = room?.boardSize ?? 4;
@@ -460,21 +465,42 @@ export default function BlitzPage() {
     return () => { if (pollRef.current) clearTimeout(pollRef.current); };
   }, [user, poll]);
 
-  /* ── local countdown ── */
+  /* ── round timer (only ticks once the synchronized countdown is over) ── */
   useEffect(() => {
     if (!room) return;
-    if (room.status === 'playing') {
+    const counting = room.status === 'playing' && room.startsInSeconds > 0;
+    if (room.status === 'playing' && !counting) {
       setLocalTime(room.timeLeft);
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         setLocalTime(prev => Math.max(0, prev - 1));
       }, 1000);
     } else {
+      if (counting) setLocalTime(room.roundDuration);
       if (timerRef.current) clearInterval(timerRef.current);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room?.status, room?.roundStartedAt]);
+  }, [room?.status, room?.roundStartedAt, room?.startsInSeconds]);
+
+  /* ── pre-round countdown: both phones tick to the same shared start instant ── */
+  useEffect(() => {
+    if (!room || room.status !== 'playing' || room.startsInSeconds <= 0) {
+      setCountdown(0);
+      countingRef.current = false;
+      return;
+    }
+    const target = Date.now() + room.startsInSeconds * 1000;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((target - Date.now()) / 1000));
+      setCountdown(left);
+      countingRef.current = left > 0;
+    };
+    tick();
+    const id = setInterval(tick, 200);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.status, room?.currentRound, room?.startsInSeconds]);
 
   /* ── new round detected → reset local board ── */
   useEffect(() => {
@@ -524,7 +550,7 @@ export default function BlitzPage() {
   /* ── cell tap ── */
   const handleCellTap = (r: number, c: number) => {
     if (!room?.puzzle || room.status !== 'playing') return;
-    if (frozenRef.current) return;
+    if (frozenRef.current || countingRef.current) return;
     if (isGiven(room.puzzle, r, c)) return;
     if (room.players[user!.username]?.submitted) return;
     setSelected([r, c]);
@@ -533,7 +559,7 @@ export default function BlitzPage() {
   /* ── number entry ── */
   const handleNum = useCallback((n: number) => {
     if (!selected || !room?.puzzle || room.status !== 'playing') return;
-    if (frozenRef.current) return;
+    if (frozenRef.current || countingRef.current) return;
     if (n > room.boardSize) return;
     if (room.players[user!.username]?.submitted) return;
     const [r, c] = selected;
@@ -549,7 +575,7 @@ export default function BlitzPage() {
   /* ── erase ── */
   const handleErase = useCallback(() => {
     if (!selected || !room?.puzzle || room.status !== 'playing') return;
-    if (frozenRef.current) return;
+    if (frozenRef.current || countingRef.current) return;
     if (room.players[user!.username]?.submitted) return;
     const [r, c] = selected;
     if (isGiven(room.puzzle, r, c)) return;
@@ -564,7 +590,7 @@ export default function BlitzPage() {
   /* ── submit ── */
   const handleSubmit = async () => {
     if (!user || !room || room.status !== 'playing') return;
-    if (frozenRef.current) return;
+    if (frozenRef.current || countingRef.current) return;
     if (room.players[user.username]?.submitted) return;
     setSubmitting(true);
     const data = await apiAction('submit', user.username, cellsRef.current);
@@ -575,7 +601,7 @@ export default function BlitzPage() {
   /* ── use the round's powerup ── */
   const handleUsePowerup = useCallback(async () => {
     if (!user || !room || room.status !== 'playing') return;
-    if (frozenRef.current) return;
+    if (frozenRef.current || countingRef.current) return;
     const mine = room.players[user.username];
     if (!mine?.powerup || mine.powerupUsed || mine.submitted) return;
     // Flush any pending local edits first so a server-side Reveal fills onto my
@@ -589,7 +615,7 @@ export default function BlitzPage() {
   /* ── skip (9×9 bonus only) ── */
   const handleSkip = async () => {
     if (!user || !room || room.status !== 'playing' || !room.isBonus) return;
-    if (frozenRef.current) return;
+    if (frozenRef.current || countingRef.current) return;
     if (room.players[user.username]?.submitted) return;
     setSubmitting(true);
     const data = await apiAction('skip', user.username);
@@ -654,6 +680,7 @@ export default function BlitzPage() {
   const foggedLeft   = myState?.foggedSecondsLeft ?? 0;
   const isFrozen     = frozenLeft > 0;
   const isFogged     = foggedLeft > 0;
+  const counting     = countdown > 0;
   const myReady      = !!myState?.ready;
   const oppReady     = !!oppState?.ready;
 
@@ -770,7 +797,7 @@ export default function BlitzPage() {
               used={!!myState?.powerupUsed}
               shielded={!!myState?.shielded}
               wager={!!myState?.wager}
-              disabled={isFrozen}
+              disabled={isFrozen || counting}
               onUse={handleUsePowerup}
             />
           )}
@@ -781,7 +808,7 @@ export default function BlitzPage() {
           </div>
 
           {/* Main board (with freeze/fog overlays) */}
-          <div className={`${styles.boardZone} ${isFogged ? styles.boardZoneFogged : ''}`}>
+          <div className={`${styles.boardZone} ${isFogged && !counting ? styles.boardZoneFogged : ''}`}>
             <Board
               puzzle={room.puzzle}
               userCells={userCells}
@@ -790,14 +817,21 @@ export default function BlitzPage() {
               submitted={mySubmitted}
               size={size}
             />
-            {isFrozen && (
+            {counting && (
+              <div className={`${styles.sabotageOverlay} ${styles.countdownOverlay}`}>
+                <span className={styles.countdownLabel}>Get ready…</span>
+                <span className={styles.countdownNum}>{countdown}</span>
+                <span className={styles.sabotageSub}>both players set</span>
+              </div>
+            )}
+            {isFrozen && !counting && (
               <div className={styles.sabotageOverlay}>
                 <span className={styles.sabotageIcon}>🧊</span>
                 <span className={styles.sabotageText}>Frozen!</span>
                 <span className={styles.sabotageSub}>{frozenLeft}s</span>
               </div>
             )}
-            {isFogged && !isFrozen && (
+            {isFogged && !isFrozen && !counting && (
               <div className={`${styles.sabotageOverlay} ${styles.fogLabel}`}>
                 <span className={styles.sabotageIcon}>🌫️</span>
                 <span className={styles.sabotageText}>Fogged</span>
@@ -808,13 +842,13 @@ export default function BlitzPage() {
 
           {/* Numpad */}
           {!mySubmitted && (
-            <div className={`${styles.numpad} ${isFrozen ? styles.numpadFrozen : ''}`}>
+            <div className={`${styles.numpad} ${isFrozen || counting ? styles.numpadFrozen : ''}`}>
               {Array.from({ length: size }, (_, i) => i + 1).map(n => (
-                <button key={n} className={styles.numBtn} onClick={() => handleNum(n)} disabled={isFrozen}>
+                <button key={n} className={styles.numBtn} onClick={() => handleNum(n)} disabled={isFrozen || counting}>
                   {n}
                 </button>
               ))}
-              <button className={`${styles.numBtn} ${styles.eraseBtn}`} onClick={handleErase} disabled={isFrozen}>
+              <button className={`${styles.numBtn} ${styles.eraseBtn}`} onClick={handleErase} disabled={isFrozen || counting}>
                 ⌫
               </button>
             </div>
@@ -823,15 +857,16 @@ export default function BlitzPage() {
           {/* Submit / skip / waiting */}
           {!mySubmitted ? (
             <div className={styles.actionStack}>
-              <button className={styles.submitBtn} onClick={handleSubmit} disabled={submitting || isFrozen}>
+              <button className={styles.submitBtn} onClick={handleSubmit} disabled={submitting || isFrozen || counting}>
                 {submitting
                   ? <><span className={styles.spinner} /> Submitting…</>
+                  : counting ? `Starting in ${countdown}…`
                   : isFrozen ? '🧊 Frozen…'
                   : 'Submit Answer ⚡'
                 }
               </button>
               {room.isBonus && (
-                <button className={styles.skipBtn} onClick={handleSkip} disabled={submitting || isFrozen}>
+                <button className={styles.skipBtn} onClick={handleSkip} disabled={submitting || isFrozen || counting}>
                   Skip bonus (forfeit points)
                 </button>
               )}

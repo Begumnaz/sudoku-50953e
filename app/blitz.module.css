@@ -1148,6 +1148,31 @@
 
 .numpadFrozen { opacity: 0.5; pointer-events: none; }
 
+/* synchronized pre-round countdown */
+.countdownOverlay {
+  background: rgba(10, 11, 16, 0.45);
+  gap: 4px;
+}
+.countdownLabel {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.countdownNum {
+  font-size: 4.5rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--accent);
+  text-shadow: 0 4px 24px var(--accent-glow);
+  animation: countdownPop 1s ease-in-out infinite;
+}
+@keyframes countdownPop {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.18); }
+}
+
 /* Gold bonus variant of the round badge */
 .bonusBadge {
   color: var(--gold) !important;

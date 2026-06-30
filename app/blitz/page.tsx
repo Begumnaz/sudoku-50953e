@@ -399,6 +399,27 @@ function PowerupBar({
   );
 }
 
+/* ─────────────────────── PowerupFlash ─────────────────────── */
+const FLASH_CONFIG: Record<string, { icon: string; label: string; cls: string }> = {
+  freeze: { icon: '🧊', label: 'FROZEN!',            cls: 'flashFreeze' },
+  fog:    { icon: '🌫️', label: 'FOGGED!',            cls: 'flashFog' },
+  reveal: { icon: '✨', label: 'REVEALED',           cls: 'flashReveal' },
+  shield: { icon: '🛡️', label: 'SHIELD UP',          cls: 'flashShield' },
+  double: { icon: '🎲', label: 'DOUBLE OR NOTHING',  cls: 'flashDouble' },
+};
+
+function PowerupFlash({ kind }: { kind: string }) {
+  const c = FLASH_CONFIG[kind];
+  if (!c) return null;
+  return (
+    <div className={`${styles.flashOverlay} ${styles[c.cls]}`} aria-hidden>
+      <span className={styles.flashRing} />
+      <span className={styles.flashIcon}>{c.icon}</span>
+      <span className={styles.flashLabel}>{c.label}</span>
+    </div>
+  );
+}
+
 /* ═══════════════════ MAIN PAGE ═══════════════════ */
 const AUTH_KEY = 'blitz_user';
 
@@ -413,6 +434,7 @@ export default function BlitzPage() {
   const [prevRound, setPrevRound] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [showReset, setShowReset] = useState(false);
+  const [flash, setFlash] = useState<{ kind: string; key: number } | null>(null);
 
   const pollRef  = useRef<ReturnType<typeof setTimeout>  | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -421,6 +443,10 @@ export default function BlitzPage() {
   const frozenRef = useRef(false);
   const countingRef = useRef(false);
   const lastResync = useRef<string | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashKey = useRef(0);
+  const prevFrozen = useRef(0);
+  const prevFogged = useRef(0);
 
   const size     = room?.boardSize ?? 4;
   const opponent = user ? PLAYERS.find(p => p !== user.username) ?? '' : '';
@@ -537,6 +563,27 @@ export default function BlitzPage() {
       ((user ? room.players[user.username]?.frozenSecondsLeft ?? 0 : 0) > 0);
   }, [room, user]);
 
+  /* ── one-shot powerup flash animation ── */
+  const triggerFlash = useCallback((kind: string) => {
+    flashKey.current += 1;
+    setFlash({ kind, key: flashKey.current });
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 1500);
+  }, []);
+
+  /* ── detect a sabotage landing on ME (rising edge) → play its animation so I
+        know what just hit me, even though I didn't trigger it ── */
+  useEffect(() => {
+    if (!room || !user) { prevFrozen.current = 0; prevFogged.current = 0; return; }
+    const mine = room.players[user.username];
+    const fz = mine?.frozenSecondsLeft ?? 0;
+    const fg = mine?.foggedSecondsLeft ?? 0;
+    if (fz > 0 && prevFrozen.current === 0) triggerFlash('freeze');
+    if (fg > 0 && prevFogged.current === 0) triggerFlash('fog');
+    prevFrozen.current = fz;
+    prevFogged.current = fg;
+  }, [room, user, triggerFlash]);
+
   /* ── debounced cell sync ── */
   const scheduleCellSync = useCallback((cells: BoardN) => {
     if (syncRef.current) clearTimeout(syncRef.current);
@@ -608,9 +655,15 @@ export default function BlitzPage() {
     // latest board (and a later poll won't clobber the revealed cell).
     if (syncRef.current) { clearTimeout(syncRef.current); syncRef.current = null; }
     await apiAction('update_cells', user.username, cellsRef.current);
+    const type = mine.powerup;
     const data = await apiAction('powerup', user.username);
-    if (data) setRoom(data);
-  }, [user, room]);
+    if (data) {
+      setRoom(data);
+      // Self-powerups play their animation on my own screen (freeze/fog flash
+      // on the opponent via the rising-edge detector; scramble stays silent).
+      if (type === 'reveal' || type === 'shield' || type === 'double') triggerFlash(type);
+    }
+  }, [user, room, triggerFlash]);
 
   /* ── skip (9×9 bonus only) ── */
   const handleSkip = async () => {
@@ -697,6 +750,9 @@ export default function BlitzPage() {
 
   return (
     <div className={styles.app}>
+
+      {/* ── Powerup-use flash (full-screen, plays then clears) ── */}
+      {flash && <PowerupFlash key={flash.key} kind={flash.kind} />}
 
       {/* ── Header ── */}
       <header className={styles.header}>

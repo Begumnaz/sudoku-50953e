@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import type { CSSProperties } from 'react';
 import Link from 'next/link';
 import styles from '../blitz.module.css';
 
@@ -44,6 +45,21 @@ interface AuthUser {
 const PLAYERS = ['Edin', 'Begus'] as const;
 const POLL_MS_PLAY  = 800;
 const POLL_MS_LOBBY = 2000;
+
+/* Piñata-burst confetti: precomputed radial directions so each piece flies out
+   at its own angle/distance/spin. Pure CSS animation, no library. */
+const CONFETTI_EMOJI = ['🎉', '🎊', '⭐', '✨', '🟡', '🔴', '🟢', '🔵', '🟣', '🟠'];
+const CONFETTI = Array.from({ length: 18 }, (_, i) => {
+  const angle = (i / 18) * Math.PI * 2;
+  const dist  = 78 + (i % 3) * 22;
+  return {
+    dx:    Math.round(Math.cos(angle) * dist),
+    dy:    Math.round(Math.sin(angle) * dist),
+    rot:   (i * 53) % 360,
+    delay: (i % 5) * 35,
+    emoji: CONFETTI_EMOJI[i % CONFETTI_EMOJI.length],
+  };
+});
 
 /* ─────────────────────── helpers ─────────────────────── */
 const boxDim = (size: number) => (size === 9 ? 3 : 2);
@@ -716,9 +732,35 @@ export default function BlitzPage() {
       {(isRoundEnd || isMatchEnd) && (
         <div className={styles.roundEnd}>
           <div className={styles.roundEndCard}>
-            <div className={styles.roundEndEmoji}>
-              {isDraw ? '🤝' : iWon ? '🏆' : '😤'}
-            </div>
+            {isDraw ? (
+              <div className={styles.roundEndEmoji}>🤝</div>
+            ) : iWon ? (
+              <div className={styles.winStage} aria-label="You won">
+                <div className={styles.confettiBurst} aria-hidden>
+                  {CONFETTI.map((c, i) => (
+                    <span
+                      key={i}
+                      className={styles.confettiPiece}
+                      style={{
+                        '--dx': `${c.dx}px`,
+                        '--dy': `${c.dy}px`,
+                        '--rot': `${c.rot}deg`,
+                        animationDelay: `${c.delay}ms`,
+                      } as unknown as CSSProperties}
+                    >
+                      {c.emoji}
+                    </span>
+                  ))}
+                </div>
+                <div className={styles.trophyWiggle}>🏆</div>
+              </div>
+            ) : (
+              <div className={styles.loseStage} aria-label="You lost">
+                <div className={styles.huffEmoji}>😤</div>
+                <span className={`${styles.puff} ${styles.puffL}`} aria-hidden>💨</span>
+                <span className={`${styles.puff} ${styles.puffR}`} aria-hidden>💨</span>
+              </div>
+            )}
             <div className={`${styles.roundEndTitle} ${iWon ? styles.titleWin : isDraw ? styles.titleDraw : styles.titleLoss}`}>
               {isMatchEnd
                 ? (isDraw ? 'Match drawn!' : iWon ? 'You won the match!' : `${opponent} won the match!`)

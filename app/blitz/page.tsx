@@ -62,7 +62,10 @@ const CONFETTI = Array.from({ length: 18 }, (_, i) => {
 });
 
 /* ─────────────────────── helpers ─────────────────────── */
-const boxDim = (size: number) => (size === 9 ? 3 : 2);
+const boxDims = (size: number) =>
+  size === 9 ? { rows: 3, cols: 3 }
+  : size === 6 ? { rows: 2, cols: 3 }
+  : { rows: 2, cols: 2 };
 
 function emptyBoard(size: number): BoardN {
   return Array.from({ length: size }, () => Array(size).fill(null));
@@ -270,11 +273,11 @@ function Board({
   size: number;
 }) {
   const display = buildDisplay(puzzle, userCells);
-  const bd = boxDim(size);
+  const { rows: boxRows, cols: boxCols } = boxDims(size);
 
   return (
     <div
-      className={`${styles.board} ${size === 9 ? styles.board9 : ''}`}
+      className={`${styles.board} ${size === 9 ? styles.board9 : size === 6 ? styles.board6 : ''}`}
       style={{ gridTemplateColumns: `repeat(${size}, 1fr)`, gridTemplateRows: `repeat(${size}, 1fr)` }}
     >
       {display.map((row, r) =>
@@ -284,12 +287,12 @@ function Board({
           const selVal   = selected ? display[selected[0]][selected[1]] : null;
           const isRelated = selected
             ? (r === selected[0] || c === selected[1] ||
-               (Math.floor(r / bd) === Math.floor(selected[0] / bd) &&
-                Math.floor(c / bd) === Math.floor(selected[1] / bd)))
+               (Math.floor(r / boxRows) === Math.floor(selected[0] / boxRows) &&
+                Math.floor(c / boxCols) === Math.floor(selected[1] / boxCols)))
             : false;
           const isSameNum = !isSel && !!selVal && val === selVal;
-          const boxRight  = c % bd === bd - 1 && c !== size - 1;
-          const boxBottom = r % bd === bd - 1 && r !== size - 1;
+          const boxRight  = c % boxCols === boxCols - 1 && c !== size - 1;
+          const boxBottom = r % boxRows === boxRows - 1 && r !== size - 1;
 
           return (
             <div
@@ -318,8 +321,8 @@ function Board({
 /* ─────────────────────── MiniBoard ─────────────────────── */
 function MiniBoard({ cells, puzzle, size }: { cells: BoardN | null; puzzle: BoardN; size: number }) {
   const display = cells ? buildDisplay(puzzle, cells) : puzzle;
-  const bd = boxDim(size);
-  const px = size === 9 ? 16 : 30;
+  const { rows: boxRows, cols: boxCols } = boxDims(size);
+  const px = size === 9 ? 16 : size === 6 ? 22 : 30;
   return (
     <div
       className={styles.miniBoard}
@@ -334,8 +337,8 @@ function MiniBoard({ cells, puzzle, size }: { cells: BoardN | null; puzzle: Boar
               className={[
                 styles.miniCell,
                 given    ? styles.miniGiven : '',
-                c % bd === bd - 1 && c !== size - 1 ? styles.miniBoxR : '',
-                r % bd === bd - 1 && r !== size - 1 ? styles.miniBoxB : '',
+                c % boxCols === boxCols - 1 && c !== size - 1 ? styles.miniBoxR : '',
+                r % boxRows === boxRows - 1 && r !== size - 1 ? styles.miniBoxB : '',
               ].filter(Boolean).join(' ')}
               style={{ width: px, height: px, fontSize: size === 9 ? '0.6rem' : '0.78rem' }}
             >

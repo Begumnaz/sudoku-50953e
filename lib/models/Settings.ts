@@ -4,9 +4,8 @@
 
 import type { Difficulty } from '../sudoku';
 
-/** Board sizes we can actually generate today (4×4 and 9×9). 6×6 would need a
- *  dedicated generator + non-square box rendering — tracked as a future ticket. */
-export type NormalBoardSize = 4 | 9;
+/** Board sizes available for ordinary rounds. */
+export type NormalBoardSize = 4 | 6 | 9;
 
 export interface BlitzSettings {
   /** Board size for ordinary (non-bonus) rounds. */
@@ -44,8 +43,11 @@ export function sanitizeSettings(input: Partial<BlitzSettings> | null | undefine
   const diff = (v: unknown, fallback: Difficulty): Difficulty =>
     DIFFICULTIES.includes(v as Difficulty) ? (v as Difficulty) : fallback;
 
+  const boardSize: NormalBoardSize =
+    s.normalBoardSize === 9 ? 9 : s.normalBoardSize === 6 ? 6 : 4;
+
   return {
-    normalBoardSize: s.normalBoardSize === 9 ? 9 : 4,
+    normalBoardSize: boardSize,
     normalSeconds: clampInt(s.normalSeconds, 20, 600, DEFAULT_SETTINGS.normalSeconds),
     bonusSeconds: clampInt(s.bonusSeconds, 30, 900, DEFAULT_SETTINGS.bonusSeconds),
     bonusEvery: clampInt(s.bonusEvery, 0, 100, DEFAULT_SETTINGS.bonusEvery),

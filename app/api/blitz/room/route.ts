@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import { generate4x4 } from '@/lib/sudoku4';
+import { generate6x6 } from '@/lib/sudoku6';
 import { generatePuzzle } from '@/lib/sudoku';
 import {
   computeScore,
@@ -154,7 +155,9 @@ function startRound(db: ReturnType<typeof getDb>, nextRound: number): void {
   const settings = readBlitzSettings(db);
   const { isBonus, boardSize, durationSeconds, difficulty } = resolveRound(nextRound, settings);
   const { puzzle, solution } =
-    boardSize === 9 ? generatePuzzle(difficulty) : generate4x4(8);
+    boardSize === 9 ? generatePuzzle(difficulty)
+    : boardSize === 6 ? generate6x6(18)
+    : generate4x4(8);
 
   const startTx = db.transaction(() => {
     db.prepare(`
@@ -363,7 +366,8 @@ export async function POST(req: NextRequest) {
       const solution = room.solution ? JSON.parse(room.solution) : null;
       const puzzle   = room.puzzle   ? JSON.parse(room.puzzle)   : null;
       const remaining = Math.max(0, room.round_duration - Math.floor(elapsedSeconds(room)));
-      const size: PuzzleSize = puzzle && puzzle.length === 9 ? 9 : 4;
+      const size: PuzzleSize =
+        puzzle && puzzle.length === 9 ? 9 : puzzle && puzzle.length === 6 ? 6 : 4;
       const solved = isSolved(mergeGivens(puzzle, cells), solution);
       score = computeScore(size, solved, remaining).total;
       savedCells = JSON.stringify(cells);

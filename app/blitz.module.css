@@ -1041,6 +1041,17 @@
   font-weight: 800;
 }
 
+.board6 {
+  max-width: 340px;
+  gap: 3px;
+  padding: 5px;
+}
+.board6 .cell {
+  font-size: 1.5rem;
+  border-radius: 6px;
+  font-weight: 800;
+}
+
 /* Gold bonus variant of the round badge */
 .bonusBadge {
   color: var(--gold) !important;

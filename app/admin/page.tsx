@@ -130,12 +130,12 @@ export default function AdminPage() {
         <section className={styles.group}>
           <label className={styles.groupLabel}>Normal round board size</label>
           <Segmented<NormalBoardSize>
-            options={[4, 9]}
+            options={[4, 6, 9]}
             value={settings.normalBoardSize}
             onChange={v => patch({ normalBoardSize: v })}
             render={v => `${v}×${v}`}
           />
-          <p className={styles.hint}>9×9 makes every round a full Sudoku. (6×6 coming later.)</p>
+          <p className={styles.hint}>6×6 is a nice step up; 9×9 makes every round a full Sudoku.</p>
         </section>
 
         {settings.normalBoardSize === 9 && (

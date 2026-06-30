@@ -6,8 +6,8 @@ export type Cell = number | null;
 /** A square grid of cells; null = blank. */
 export type Grid = Cell[][];
 
-/** Supported board sizes. 4 = 2×2 boxes, 9 = 3×3 boxes. */
-export type PuzzleSize = 4 | 9;
+/** Supported board sizes. 4 = 2×2 boxes, 6 = 2×3 boxes, 9 = 3×3 boxes. */
+export type PuzzleSize = 4 | 6 | 9;
 
 /** Practice-mode difficulty levels (9×9 only). */
 export type Difficulty = 'extra-easy' | 'easy' | 'medium' | 'hard';
@@ -22,7 +22,11 @@ export interface Puzzle {
   difficulty?: Difficulty;
 }
 
-/** Box dimension for a board size (2 for 4×4, 3 for 9×9). */
-export function boxDim(size: PuzzleSize): number {
-  return size === 9 ? 3 : 2;
+/** Box dimensions (rows × cols) for a board size. 4×4 = 2×2, 6×6 = 2×3
+ *  (2 tall, 3 wide), 9×9 = 3×3. Boxes are not always square, so callers must
+ *  use rows for vertical grouping and cols for horizontal. */
+export function boxDims(size: PuzzleSize): { rows: number; cols: number } {
+  if (size === 9) return { rows: 3, cols: 3 };
+  if (size === 6) return { rows: 2, cols: 3 };
+  return { rows: 2, cols: 2 };
 }

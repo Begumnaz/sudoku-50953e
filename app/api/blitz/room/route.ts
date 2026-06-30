@@ -10,7 +10,11 @@ import {
   matchNumberForRound,
   isMatchEndingRound,
   resolveRound,
+  FREEZE_SECONDS,
+  FOG_SECONDS,
+  SCRAMBLE_CELLS,
   type PuzzleSize,
+  type PowerupId,
 } from '@/lib/models';
 import { readBlitzSettings } from '@/lib/blitzSettings';
 
@@ -41,7 +45,25 @@ type PlayerStateRow = {
   submitted: number;
   score: number;
   finished_at: string | null;
+  powerup: string | null;
+  powerup_used: number;
+  frozen_until: string | null;
+  fogged_until: string | null;
+  shielded: number;
+  wager: number;
+  resync_token: string | null;
 };
+
+const PLAYER_NAMES = ['Edin', 'Begus'] as const;
+const opponentOf = (u: string) => (u === 'Edin' ? 'Begus' : 'Edin');
+const resyncToken = () => `${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+
+/** Whole seconds left until an ISO timestamp (stored as SQLite UTC), 0 if past. */
+function secondsLeftUntil(ts: string | null): number {
+  if (!ts) return 0;
+  const ms = new Date(ts + 'Z').getTime() - Date.now();
+  return ms > 0 ? Math.ceil(ms / 1000) : 0;
+}
 
 type UserRow = {
   username: string;
@@ -133,6 +155,28 @@ function finalizeRound(db: ReturnType<typeof getDb>, room: RoomRow): void {
       UPDATE blitz_rooms SET status = ?, updated_at = datetime('now') WHERE id = ?
     `).run(nextStatus, ROOM_ID);
 
+    // Double-or-Nothing: the round winner is decided by base (solve) scores;
+    // then a wagering player doubles on a win or drops to 0 otherwise. The
+    // adjusted score is persisted so the result screen and tally agree.
+    if (players.length === 2) {
+      const [a, b] = players;
+      const aBase = a.score, bBase = b.score;
+      const adjust = (base: number, otherBase: number, wager: number) =>
+        wager ? (base > otherBase ? base * 2 : 0) : base;
+      const aAdj = adjust(aBase, bBase, a.wager);
+      const bAdj = adjust(bBase, aBase, b.wager);
+      if (aAdj !== a.score) {
+        db.prepare('UPDATE blitz_player_state SET score = ? WHERE room_id = ? AND round = ? AND username = ?')
+          .run(aAdj, ROOM_ID, room.current_round, a.username);
+        a.score = aAdj;
+      }
+      if (bAdj !== b.score) {
+        db.prepare('UPDATE blitz_player_state SET score = ? WHERE room_id = ? AND round = ? AND username = ?')
+          .run(bAdj, ROOM_ID, room.current_round, b.username);
+        b.score = bAdj;
+      }
+    }
+
     for (const p of players) {
       db.prepare('UPDATE blitz_users SET total_score = total_score + ? WHERE username = ?')
         .run(p.score, p.username);
@@ -185,11 +229,16 @@ function startRound(db: ReturnType<typeof getDb>, nextRound: number): void {
     db.prepare('DELETE FROM blitz_player_state WHERE room_id = ? AND round = ?')
       .run(ROOM_ID, nextRound);
 
-    for (const player of ['Edin', 'Begus']) {
+    const pool = settings.powerupsEnabled;
+    const grant = (): PowerupId | null =>
+      pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+
+    for (const player of PLAYER_NAMES) {
       db.prepare(`
-        INSERT INTO blitz_player_state (room_id, round, username, cells, submitted, score)
-        VALUES (?, ?, ?, NULL, 0, 0)
-      `).run(ROOM_ID, nextRound, player);
+        INSERT INTO blitz_player_state
+          (room_id, round, username, cells, submitted, score, powerup, powerup_used, shielded, wager)
+        VALUES (?, ?, ?, NULL, 0, 0, ?, 0, 0, 0)
+      `).run(ROOM_ID, nextRound, player, grant());
     }
   });
   startTx();
@@ -200,7 +249,13 @@ function buildRoomPayload(db: ReturnType<typeof getDb>, room: RoomRow) {
     .prepare('SELECT * FROM blitz_player_state WHERE room_id = ? AND round = ?')
     .all(ROOM_ID, room.current_round) as PlayerStateRow[];
 
-  const playerMap: Record<string, { cells: unknown; submitted: boolean; score: number; ready: boolean; solved: boolean }> = {};
+  type PlayerPayload = {
+    cells: unknown; submitted: boolean; score: number; ready: boolean; solved: boolean;
+    powerup: PowerupId | null; powerupUsed: boolean;
+    frozenSecondsLeft: number; foggedSecondsLeft: number;
+    shielded: boolean; wager: boolean; resyncToken: string | null;
+  };
+  const playerMap: Record<string, PlayerPayload> = {};
   for (const p of players) {
     playerMap[p.username] = {
       cells:     safeParseCells(p.cells),
@@ -211,6 +266,13 @@ function buildRoomPayload(db: ReturnType<typeof getDb>, room: RoomRow) {
       // incorrect or skipped submission scores 0. Lets the submitter see their
       // own verdict immediately without revealing it to the opponent's UI.
       solved:    !!p.submitted && p.score > 0,
+      powerup:     (p.powerup as PowerupId | null) ?? null,
+      powerupUsed: !!p.powerup_used,
+      frozenSecondsLeft: room.status === 'playing' ? secondsLeftUntil(p.frozen_until) : 0,
+      foggedSecondsLeft: room.status === 'playing' ? secondsLeftUntil(p.fogged_until) : 0,
+      shielded:    !!p.shielded,
+      wager:       !!p.wager,
+      resyncToken: p.resync_token ?? null,
     };
   }
 
@@ -390,6 +452,88 @@ export async function POST(req: NextRequest) {
 
     const updated = db.prepare('SELECT * FROM blitz_rooms WHERE id = ?').get(ROOM_ID) as RoomRow;
     return NextResponse.json(buildRoomPayload(db, updated));
+  }
+
+  /* ── powerup (use the round's granted powerup) ── */
+  if (action === 'powerup') {
+    if (!username) return NextResponse.json({ error: 'missing username' }, { status: 400 });
+    if (room.status !== 'playing')
+      return NextResponse.json({ error: 'not playing' }, { status: 400 });
+
+    const getPS = (u: string) =>
+      db.prepare('SELECT * FROM blitz_player_state WHERE room_id = ? AND round = ? AND username = ?')
+        .get(ROOM_ID, room.current_round, u) as PlayerStateRow | undefined;
+
+    const me = getPS(username);
+    if (!me || !me.powerup)
+      return NextResponse.json({ error: 'no powerup to use' }, { status: 400 });
+    if (me.powerup_used)
+      return NextResponse.json({ error: 'powerup already used' }, { status: 400 });
+    if (me.submitted)
+      return NextResponse.json({ error: 'already submitted' }, { status: 400 });
+
+    const oppName  = opponentOf(username);
+    const opp      = getPS(oppName);
+    const type     = me.powerup as PowerupId;
+    const solution = room.solution ? JSON.parse(room.solution) : null;
+    const puzzle   = room.puzzle   ? JSON.parse(room.puzzle)   : null;
+    const n = solution ? solution.length : puzzle ? puzzle.length : room.board_size;
+    const isGivenCell = (r: number, c: number) =>
+      !!puzzle && puzzle[r] != null && (puzzle[r][c] ?? null) !== null;
+
+    const setCol = (user: string, sql: string, ...params: unknown[]) =>
+      db.prepare(`UPDATE blitz_player_state SET ${sql} WHERE room_id = ? AND round = ? AND username = ?`)
+        .run(...params, ROOM_ID, room.current_round, user);
+
+    const tx = db.transaction(() => {
+      setCol(username, 'powerup_used = 1');
+
+      if (type === 'reveal') {
+        const myCells: (number | null)[][] =
+          safeParseCells(me.cells) ?? Array.from({ length: n }, () => Array(n).fill(null));
+        const candidates: [number, number][] = [];
+        for (let r = 0; r < n; r++)
+          for (let c = 0; c < n; c++)
+            if (!isGivenCell(r, c) && (myCells[r]?.[c] ?? null) === null) candidates.push([r, c]);
+        if (candidates.length && solution) {
+          const [r, c] = candidates[Math.floor(Math.random() * candidates.length)];
+          if (!myCells[r]) myCells[r] = Array(n).fill(null);
+          myCells[r][c] = solution[r][c];
+          setCol(username, 'cells = ?, resync_token = ?', JSON.stringify(myCells), resyncToken());
+        }
+      } else if (type === 'shield') {
+        setCol(username, 'shielded = 1');
+      } else if (type === 'double') {
+        setCol(username, 'wager = 1');
+      } else if (opp) {
+        // sabotage — a shield negates it (and is consumed)
+        if (opp.shielded) {
+          setCol(oppName, 'shielded = 0');
+        } else if (type === 'freeze') {
+          setCol(oppName, "frozen_until = datetime('now', ?)", `+${FREEZE_SECONDS} seconds`);
+        } else if (type === 'fog') {
+          setCol(oppName, "fogged_until = datetime('now', ?)", `+${FOG_SECONDS} seconds`);
+        } else if (type === 'scramble') {
+          const oc = safeParseCells(opp.cells);
+          if (oc) {
+            const filled: [number, number][] = [];
+            for (let r = 0; r < n; r++)
+              for (let c = 0; c < n; c++)
+                if (!isGivenCell(r, c) && (oc[r]?.[c] ?? null) !== null) filled.push([r, c]);
+            for (let i = filled.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [filled[i], filled[j]] = [filled[j], filled[i]];
+            }
+            for (const [r, c] of filled.slice(0, SCRAMBLE_CELLS)) oc[r][c] = null;
+            setCol(oppName, 'cells = ?, resync_token = ?', JSON.stringify(oc), resyncToken());
+          }
+        }
+      }
+    });
+    tx();
+
+    const fresh = db.prepare('SELECT * FROM blitz_rooms WHERE id = ?').get(ROOM_ID) as RoomRow;
+    return NextResponse.json(buildRoomPayload(db, fresh));
   }
 
   /* ── reset (wipe all scores + rounds) ── */

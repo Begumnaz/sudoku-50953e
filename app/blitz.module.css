@@ -1052,6 +1052,102 @@
   font-weight: 800;
 }
 
+/* ══════════════════════════════════════
+   POWERUPS
+══════════════════════════════════════ */
+.powerupBar {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.powerupUseBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, var(--surface2) 0%, var(--surface3) 100%);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: left;
+  box-shadow: 0 4px 16px var(--accent-glow);
+  transition: transform 0.08s, box-shadow 0.12s;
+}
+.powerupUseBtn:active:not(:disabled) { transform: scale(0.98); }
+.powerupUseBtn:disabled { opacity: 0.5; cursor: default; box-shadow: none; }
+.puIcon { font-size: 1.5rem; }
+.puText { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.puLabel { font-weight: 800; font-size: 0.95rem; color: var(--text); }
+.puBlurb { font-size: 0.74rem; color: var(--text-muted); }
+.puGo {
+  font-weight: 800;
+  font-size: 0.82rem;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.powerupUsed {
+  width: 100%;
+  text-align: center;
+  padding: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+}
+.powerupActive {
+  width: 100%;
+  text-align: center;
+  padding: 9px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--gold);
+  background: var(--gold-glow);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius-sm);
+}
+
+/* board zone + sabotage overlays */
+.boardZone {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  transition: filter 0.2s;
+}
+.boardZoneFogged { filter: blur(7px) brightness(0.85); }
+.sabotageOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: rgba(10, 11, 16, 0.55);
+  border-radius: var(--radius);
+  z-index: 5;
+  backdrop-filter: blur(2px);
+  animation: sabotageIn 0.2s ease-out;
+}
+.fogLabel { background: transparent; backdrop-filter: none; }
+@keyframes sabotageIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.sabotageIcon { font-size: 2.6rem; animation: sabotageShiver 0.6s ease-in-out infinite; }
+@keyframes sabotageShiver {
+  0%, 100% { transform: translateX(-2px) rotate(-3deg); }
+  50%      { transform: translateX(2px)  rotate(3deg); }
+}
+.sabotageText { font-size: 1.2rem; font-weight: 900; color: #cfe8ff; letter-spacing: 0.02em; }
+.sabotageSub  { font-size: 0.9rem; font-weight: 700; color: var(--text-muted); }
+
+.numpadFrozen { opacity: 0.5; pointer-events: none; }
+
 /* Gold bonus variant of the round badge */
 .bonusBadge {
   color: var(--gold) !important;

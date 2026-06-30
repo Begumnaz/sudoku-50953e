@@ -105,24 +105,43 @@ export function getDb(): Database.Database {
       bonus_seconds     INTEGER NOT NULL DEFAULT 240,
       bonus_every       INTEGER NOT NULL DEFAULT 10,
       bonus_difficulty  TEXT NOT NULL DEFAULT 'easy',
-      normal_difficulty TEXT NOT NULL DEFAULT 'easy'
+      normal_difficulty TEXT NOT NULL DEFAULT 'easy',
+      powerups_enabled  TEXT NOT NULL DEFAULT 'reveal,freeze,fog,scramble,shield,double'
     )
   `);
+  addColumnIfMissing(_db, 'blitz_settings', 'powerups_enabled',
+    `TEXT NOT NULL DEFAULT 'reveal,freeze,fog,scramble,shield,double'`);
   _db.prepare(`INSERT OR IGNORE INTO blitz_settings (id) VALUES ('global')`).run();
 
   // ── Blitz: per-player per-round state ──
   _db.exec(`
     CREATE TABLE IF NOT EXISTS blitz_player_state (
-      room_id     TEXT NOT NULL,
-      round       INTEGER NOT NULL,
-      username    TEXT NOT NULL,
-      cells       TEXT,
-      submitted   INTEGER NOT NULL DEFAULT 0,
-      score       INTEGER NOT NULL DEFAULT 0,
-      finished_at TEXT,
+      room_id      TEXT NOT NULL,
+      round        INTEGER NOT NULL,
+      username     TEXT NOT NULL,
+      cells        TEXT,
+      submitted    INTEGER NOT NULL DEFAULT 0,
+      score        INTEGER NOT NULL DEFAULT 0,
+      finished_at  TEXT,
+      powerup      TEXT,
+      powerup_used INTEGER NOT NULL DEFAULT 0,
+      frozen_until TEXT,
+      fogged_until TEXT,
+      shielded     INTEGER NOT NULL DEFAULT 0,
+      wager        INTEGER NOT NULL DEFAULT 0,
+      resync_token TEXT,
       PRIMARY KEY (room_id, round, username)
     )
   `);
+
+  // Migrate existing prod player-state tables that predate powerups.
+  addColumnIfMissing(_db, 'blitz_player_state', 'powerup',      'TEXT');
+  addColumnIfMissing(_db, 'blitz_player_state', 'powerup_used', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(_db, 'blitz_player_state', 'frozen_until', 'TEXT');
+  addColumnIfMissing(_db, 'blitz_player_state', 'fogged_until', 'TEXT');
+  addColumnIfMissing(_db, 'blitz_player_state', 'shielded',     'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(_db, 'blitz_player_state', 'wager',        'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(_db, 'blitz_player_state', 'resync_token', 'TEXT');
 
   return _db;
 }

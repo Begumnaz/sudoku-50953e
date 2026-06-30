@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import type { BlitzSettings, NormalBoardSize } from '@/lib/models';
+import type { BlitzSettings, NormalBoardSize, PowerupId } from '@/lib/models';
+import { ALL_POWERUPS } from '@/lib/models';
 import type { Difficulty } from '@/lib/sudoku';
 import styles from '../admin.module.css';
 
@@ -69,6 +70,18 @@ export default function AdminPage() {
 
   const patch = (p: Partial<BlitzSettings>) => {
     setSettings(prev => (prev ? { ...prev, ...p } : prev));
+    setSaved(false);
+  };
+
+  const togglePowerup = (id: PowerupId) => {
+    setSettings(prev => {
+      if (!prev) return prev;
+      const has = prev.powerupsEnabled.includes(id);
+      const powerupsEnabled = has
+        ? prev.powerupsEnabled.filter(x => x !== id)
+        : [...prev.powerupsEnabled, id];
+      return { ...prev, powerupsEnabled };
+    });
     setSaved(false);
   };
 
@@ -193,6 +206,37 @@ export default function AdminPage() {
             </section>
           </>
         )}
+
+        <section className={styles.group}>
+          <label className={styles.groupLabel}>Powerups</label>
+          <p className={styles.hint}>
+            Each player gets one random powerup from the enabled pool at the start of every round.
+            Tap to toggle.
+          </p>
+          <div className={styles.powerupGrid}>
+            {ALL_POWERUPS.map(p => {
+              const on = settings.powerupsEnabled.includes(p.id);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className={`${styles.powerupChip} ${on ? styles.powerupOn : ''}`}
+                  onClick={() => togglePowerup(p.id)}
+                >
+                  <span className={styles.powerupTop}>
+                    <span className={styles.powerupIcon}>{p.icon}</span>
+                    <span className={styles.powerupName}>{p.label}</span>
+                    <span className={styles.powerupCheck}>{on ? '✓' : '○'}</span>
+                  </span>
+                  <span className={styles.powerupBlurb}>{p.blurb}</span>
+                </button>
+              );
+            })}
+          </div>
+          {settings.powerupsEnabled.length === 0 && (
+            <p className={styles.hint}>All off — powerups are disabled.</p>
+          )}
+        </section>
 
         {error && <p className={styles.error}>{error}</p>}
 

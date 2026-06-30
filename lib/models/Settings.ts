@@ -3,6 +3,7 @@
 // tweaks never disrupt a round already in progress.
 
 import type { Difficulty } from '../sudoku';
+import { PowerupId, POWERUP_IDS, isPowerupId } from './Powerup';
 
 /** Board sizes available for ordinary rounds. */
 export type NormalBoardSize = 4 | 6 | 9;
@@ -20,6 +21,8 @@ export interface BlitzSettings {
   bonusDifficulty: Difficulty;
   /** Generator difficulty for ordinary rounds when they are 9×9. */
   normalDifficulty: Difficulty;
+  /** Which powerups are in the pool players draw from (empty = powerups off). */
+  powerupsEnabled: PowerupId[];
 }
 
 export const DEFAULT_SETTINGS: BlitzSettings = {
@@ -29,6 +32,7 @@ export const DEFAULT_SETTINGS: BlitzSettings = {
   bonusEvery: 10,
   bonusDifficulty: 'easy',
   normalDifficulty: 'easy',
+  powerupsEnabled: [...POWERUP_IDS],
 };
 
 const DIFFICULTIES: Difficulty[] = ['extra-easy', 'easy', 'medium', 'hard'];
@@ -46,6 +50,12 @@ export function sanitizeSettings(input: Partial<BlitzSettings> | null | undefine
   const boardSize: NormalBoardSize =
     s.normalBoardSize === 9 ? 9 : s.normalBoardSize === 6 ? 6 : 4;
 
+  // De-dupe + keep only valid powerup ids, preserving canonical order.
+  const enabledSet = new Set(
+    Array.isArray(s.powerupsEnabled) ? s.powerupsEnabled.filter(isPowerupId) : POWERUP_IDS,
+  );
+  const powerupsEnabled = POWERUP_IDS.filter(id => enabledSet.has(id));
+
   return {
     normalBoardSize: boardSize,
     normalSeconds: clampInt(s.normalSeconds, 20, 600, DEFAULT_SETTINGS.normalSeconds),
@@ -53,6 +63,7 @@ export function sanitizeSettings(input: Partial<BlitzSettings> | null | undefine
     bonusEvery: clampInt(s.bonusEvery, 0, 100, DEFAULT_SETTINGS.bonusEvery),
     bonusDifficulty: diff(s.bonusDifficulty, DEFAULT_SETTINGS.bonusDifficulty),
     normalDifficulty: diff(s.normalDifficulty, DEFAULT_SETTINGS.normalDifficulty),
+    powerupsEnabled,
   };
 }
 

@@ -113,6 +113,52 @@
   text-align: center;
 }
 
+/* ── powerup toggles ── */
+.powerupGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.powerupChip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  text-align: left;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.powerupChip:hover { border-color: var(--border-bright); }
+.powerupOn {
+  border-color: var(--accent);
+  background: var(--surface3);
+}
+.powerupTop {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.powerupIcon { font-size: 1.05rem; }
+.powerupName {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text);
+  flex: 1;
+}
+.powerupCheck {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.powerupOn .powerupCheck { color: var(--green); }
+.powerupBlurb {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.25;
+}
+
 .backLink {
   color: var(--text-muted);
   text-decoration: none;

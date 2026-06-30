@@ -5,6 +5,7 @@
 //   Match  — a 2-round group derived from the round counter
 //   Score  — round scoring rules and constants
 //   Settings — admin-tunable challenge knobs (board size, timers, bonus)
+//   Powerup  — per-round powerups (grant, effects, metadata)
 
 export * from './Puzzle';
 export * from './Player';
@@ -12,3 +13,4 @@ export * from './Round';
 export * from './Match';
 export * from './Score';
 export * from './Settings';
+export * from './Powerup';

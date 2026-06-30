@@ -2,7 +2,7 @@
 // API (read/update) and the room engine (to size/time each round).
 
 import type Database from 'better-sqlite3';
-import { BlitzSettings, DEFAULT_SETTINGS, sanitizeSettings } from './models';
+import { BlitzSettings, DEFAULT_SETTINGS, sanitizeSettings, PowerupId } from './models';
 
 const SETTINGS_ID = 'global';
 
@@ -14,6 +14,7 @@ type SettingsRow = {
   bonus_every: number;
   bonus_difficulty: string;
   normal_difficulty: string;
+  powerups_enabled: string | null;
 };
 
 export function readBlitzSettings(db: Database.Database): BlitzSettings {
@@ -22,12 +23,16 @@ export function readBlitzSettings(db: Database.Database): BlitzSettings {
     .get(SETTINGS_ID) as SettingsRow | undefined;
   if (!row) return { ...DEFAULT_SETTINGS };
   return sanitizeSettings({
-    normalBoardSize: row.normal_board_size as 4 | 9,
+    normalBoardSize: row.normal_board_size as 4 | 6 | 9,
     normalSeconds: row.normal_seconds,
     bonusSeconds: row.bonus_seconds,
     bonusEvery: row.bonus_every,
     bonusDifficulty: row.bonus_difficulty as BlitzSettings['bonusDifficulty'],
     normalDifficulty: row.normal_difficulty as BlitzSettings['normalDifficulty'],
+    powerupsEnabled: (row.powerups_enabled ?? '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean) as PowerupId[],
   });
 }
 
@@ -35,7 +40,8 @@ export function writeBlitzSettings(db: Database.Database, clean: BlitzSettings):
   db.prepare(`
     UPDATE blitz_settings
     SET normal_board_size = ?, normal_seconds = ?, bonus_seconds = ?,
-        bonus_every = ?, bonus_difficulty = ?, normal_difficulty = ?
+        bonus_every = ?, bonus_difficulty = ?, normal_difficulty = ?,
+        powerups_enabled = ?
     WHERE id = ?
   `).run(
     clean.normalBoardSize,
@@ -44,6 +50,7 @@ export function writeBlitzSettings(db: Database.Database, clean: BlitzSettings):
     clean.bonusEvery,
     clean.bonusDifficulty,
     clean.normalDifficulty,
+    clean.powerupsEnabled.join(','),
     SETTINGS_ID,
   );
 }

@@ -332,8 +332,11 @@ function MiniBoard({ cells, puzzle, size }: { cells: BoardN | null; puzzle: Boar
 }
 
 /* ═══════════════════ MAIN PAGE ═══════════════════ */
+const AUTH_KEY = 'blitz_user';
+
 export default function BlitzPage() {
   const [user, setUser]           = useState<AuthUser | null>(null);
+  const [restoring, setRestoring] = useState(true);
   const [room, setRoom]           = useState<RoomState | null>(null);
   const [userCells, setUserCells] = useState<BoardN>(emptyBoard(4));
   const [selected, setSelected]   = useState<[number, number] | null>(null);
@@ -352,6 +355,29 @@ export default function BlitzPage() {
 
   /* keep cellsRef in sync with state */
   useEffect(() => { cellsRef.current = userCells; }, [userCells]);
+
+  /* ── restore session from localStorage on mount (runs client-side only to
+        avoid SSR hydration mismatch) ── */
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(AUTH_KEY);
+      if (saved) setUser(JSON.parse(saved) as AuthUser);
+    } catch { /* corrupt/unavailable storage — ignore */ }
+    setRestoring(false);
+  }, []);
+
+  /* ── persist on login ── */
+  const handleLogin = useCallback((u: AuthUser) => {
+    setUser(u);
+    try { localStorage.setItem(AUTH_KEY, JSON.stringify(u)); } catch { /* ignore */ }
+  }, []);
+
+  /* ── clear on logout ── */
+  const handleLogout = useCallback(() => {
+    setUser(null);
+    setRoom(null);
+    try { localStorage.removeItem(AUTH_KEY); } catch { /* ignore */ }
+  }, []);
 
   /* ── poll loop ── */
   const poll = useCallback(async () => {
@@ -491,7 +517,16 @@ export default function BlitzPage() {
   }, [handleNum, handleErase, selected, room]);
 
   /* ──────────── render ──────────── */
-  if (!user) return <LoginScreen onLogin={setUser} />;
+  if (restoring) {
+    return (
+      <div className={styles.loading}>
+        <span className={styles.spinner} />
+        <span>Loading…</span>
+      </div>
+    );
+  }
+
+  if (!user) return <LoginScreen onLogin={handleLogin} />;
 
   if (!room) {
     return (
@@ -537,7 +572,7 @@ export default function BlitzPage() {
             onClick={() => setShowReset(v => !v)}
             title="Options"
           >⋯</button>
-          <button className={styles.logoutBtn} onClick={() => { setUser(null); setRoom(null); }} title="Sign out">✕</button>
+          <button className={styles.logoutBtn} onClick={handleLogout} title="Sign out">✕</button>
         </div>
       </header>
 
